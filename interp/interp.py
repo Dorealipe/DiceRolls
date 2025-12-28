@@ -191,10 +191,6 @@ class Ev:
 				continue
 
 						
-						
-
-
-
 			# normal line -> evaluate
 			self.ev_expr(line,line=i+1)
 			if self.error:
@@ -288,11 +284,11 @@ class Ev:
 				break
 			elif tok == '!':
 				a = ev_stack.pop()
-				ev_stack.push(a.jogar() if isinstance(a,Die) else a)
-#			elif tok == '%':
+				ev_stack.push(a.play() if isinstance(a,Die) else a)
+#			elif tok == '%': TODO fix this
 #				a = ev_stack.pop()
 #				b = ev_stack.pop()
-#				ev_stack.push(a.probabilidade(b) if isinstance(a,Die) else (int(a == b)))
+#				ev_stack.push(a.probability(b) if isinstance(a,Die) else (int(a == b)))
 			elif tok in  Ev.simple_ops:
 				if len(ev_stack) < 2:
 					self.err('ARGUMENT_ERROR',f'Not enough arguments for {tok}',line)

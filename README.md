@@ -1,2 +1,2 @@
 # DiceRolls
-DiceRolls is an interpreted language by me! 
+DiceRolls is an interpreted language interpreted with python.
