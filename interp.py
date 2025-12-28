@@ -1,0 +1,373 @@
+#Dice Interpreter .dr
+import sys
+from dataStruct import Stack
+from dice import Die,FairDie
+from typing import Any
+
+#from dataStruct import Stack
+def is_number(s):
+		try:
+			float(s)
+			return True
+		except ValueError:
+			return False
+def is_bool(s):
+		return s in ['True','False']
+			
+
+class Ev:
+	keywords = ['vars','funcs','stack','push','pop', 'True', 'False', 'read', 'err', '.func','.endfunc','call','.if','.endif','.else','del']
+	operators = ['!','+','-','*','/','**','&&','||','==','!=','=','#','"','--','>','<','>=','<=','T=']
+	simple_ops = ['+','-','*','/','**','&&','||','==','!=','>','<','>=','<=','T='] # 2 inputs 1 operation
+	
+	t_stack = Stack[Any]
+	t_func = tuple[list[str],list[str]] # (['arg1','arg2'],['arg1 arg2 +'])
+	t_vars = dict[str,Any]
+	t_funcs = dict[str,t_func]
+	base_funcs = {
+		"peekStack":(
+			["stackType"],
+			["stackType pop n =",
+			"stackType n push",
+			"n"])
+		}
+	
+	@staticmethod
+	def is_valid_var(name:str)->bool:
+		if not isinstance(name,str):
+			return False
+		if name in Ev.keywords:
+			return False
+		if ' ' in name:
+			return False
+		for c in name:
+			if c in Ev.operators:
+				return False
+		return True
+	def err(self,error_type:str='ERROR',message:str='',at:int|None=None):
+		self.error = True
+		print(f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}')
+	def __init__(self,varrs:t_vars={},funcs:t_funcs=base_funcs):
+		self.error:bool = False
+		self.vars:Ev.t_vars = varrs
+		self.funcs:Ev.t_funcs = funcs
+		self.str_next = False
+	def call_func(self, name:str, arg_vals:list[Any], line:int=-1):
+		"""Execute a defined function by name with provided argument values.
+		Returns the function's return value (last value on the local stack) or None.
+		Sets evaluator error state on failure.
+		"""
+		if name not in self.funcs:
+			self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line)
+			return None
+		arg_names, body = self.funcs[name]
+		if len(arg_vals) < len(arg_names):
+			self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line)
+			return None
+		if len(arg_vals) > len(arg_names):
+			self.err('ARGUMENT_ERROR',f'Too many arguments for function {repr(name)}',line)
+			return None
+		loc = dict(zip(arg_names, arg_vals))
+		local_stack = Stack()
+		# run in a child evaluator that shares globals (vars and funcs)
+		child = Ev(varrs=self.vars.copy() if isinstance(self.vars,dict) else {}, funcs=self.funcs)
+		for line_dr in body:
+			if line_dr.startswith('?'):
+				continue
+			child.ev_expr(line_dr, local_vars=loc, in_ev_stack=local_stack, line=line)
+			if child.error:
+				self.error = child.error
+				return None
+		return local_stack.pop() if local_stack else None
+
+	def ev(self, s:str):
+		
+		lines = s.split('\n')
+		i = 0
+		while i < len(lines):
+			line = lines[i].strip()
+
+			if line == '' or line.startswith('?'): #Skip
+				i += 1
+				continue
+            
+                    
+			# function definition: .func name arg1 arg2 ...
+			if line.startswith('.func'):
+				parts = line.split()
+				if len(parts) < 2: # <= 1 
+					self.err('FUNCTION_DEFINITION_ERROR', f'malformed .func header',i+1)
+					return
+				# parts[0] is '.func'
+				name = parts[1]
+				args = parts[2:]
+				
+				body = []
+				i += 1
+				# collect until .endfunc
+				while True:
+					if i >= len(lines):
+						self.err('FUNCTION_DEFINITION_ERROR', f'unterminated function definition for {name}')
+						return
+					l = lines[i].rstrip()
+					if l.strip().startswith('.endfunc'):
+						break
+					body.append(l)
+					i += 1
+				self.funcs[name] = (args, body)
+				# skip the .endfunc line
+				i += 1
+				continue
+			
+			if line.startswith(".if"):
+				split = line.split(maxsplit=1)
+				if len(split) < 2:
+					self.err('IF_STATEMENT_ERROR','Missing expression for .if',i+1)
+					i += 1
+					continue
+				expr = split[1]
+				stck = self.ev_expr(expr, line=i+1)
+				if not stck or stck.peek() is None:
+					self.err('IF_STATEMENT_ERROR','Expected expression result',i+1)
+					# skip forward to matching .endif to stay in consistent state
+					level = 0
+					j = i + 1
+					while j < len(lines):
+						stripped = lines[j].strip()
+						if stripped.startswith('.if'):
+							level += 1
+						elif stripped.startswith('.endif'):
+							if level == 0:
+								break
+							level -= 1
+						j += 1
+					if j >= len(lines):
+						self.err('IF_STATEMENT_ERROR','Unterminated if statement',i+1)
+						return
+					i = j + 1
+					continue
+				cond = bool(stck.pop())
+				# scan for matching .else (at same nesting) and .endif
+				level = 0
+				j = i + 1
+				else_index = -1
+				end_index = -1
+				while j < len(lines):
+					stripped = lines[j].strip()
+					if stripped.startswith('.if'):
+						level += 1
+					elif stripped.startswith('.endif'):
+						if level == 0:
+							end_index = j
+							break
+						else:
+							level -= 1
+					elif stripped.startswith('.else') and level == 0:
+						else_index = j
+					j += 1
+				if end_index == -1:
+					self.err('IF_STATEMENT_ERROR','Unterminated if statement',i+1)
+					return
+				# choose which block to execute
+				if cond:
+					start = i + 1
+					stop = else_index if else_index != -1 else end_index
+				else:
+					if else_index == -1:
+						# nothing to run
+						i = end_index + 1
+						continue
+					start = else_index + 1
+					stop = end_index
+				# execute lines[start:stop]
+				for k in range(start, stop):
+					l = lines[k].rstrip()
+					if l.strip().startswith('?'):
+						continue
+					self.ev_expr(l, line=k+1)
+					if self.error:
+						return
+				i = end_index + 1
+				continue
+
+						
+						
+
+
+
+			# normal line -> evaluate
+			self.ev_expr(line,line=i+1)
+			if self.error:
+				break
+			i += 1
+
+	def ev_expr(self, expr:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None, line:int=-1):
+		'''
+		Evaluate a single expression line in the given context.
+		Supports local variables and a provided stack.
+		'''
+
+		toks = expr.split()
+		if '#' in toks:
+			print('',end='\n')
+		ev_stack:Ev.t_stack = Stack() if in_ev_stack is None else in_ev_stack
+		for tok in toks:
+			if tok == 'read': tok = input("<read> ")
+			if self.str_next:
+				ev_stack.push(str(tok))
+				self.str_next = False
+				continue
+			if tok == 'err':
+				a = ev_stack.pop()
+				self.err('EXCEPTION',str(a),line)
+				break
+			elif tok[0] == 'd' and tok[1:].isdigit(): ev_stack.push(FairDie(tok))
+			elif tok[:-1].isdecimal() and tok[-1].lower() == 'f':
+				ev_stack.push(float(tok[:-1]))
+			elif is_number(tok):
+				ev_stack.push(int(tok))
+			
+			elif tok in ['True','False']: ev_stack.push(True if tok == 'True' else False)
+			elif local_vars and tok in local_vars:
+				ev_stack.push(local_vars[tok])
+			elif tok in self.vars: 
+				ev_stack.push(self.vars[tok])
+			elif tok == '--':
+				a = ev_stack.pop()
+				ev_stack.push((- a) if isinstance(a,float|int) else not a )
+			elif tok == 'stack':
+				ev_stack.push(Stack())
+			elif tok == 'push':
+				if len(ev_stack) < 2:
+					self.err('ARGUMENT_ERROR',f'Not enough arguments for {tok}')
+					break
+				a = ev_stack.pop() #value
+				s = ev_stack.pop() #stack
+				if not isinstance(s,Stack):
+					self.err('TYPE_ERROR',f'push expects arguments <Stack> <Any>, not <{type(s).__name__}> <Any>',line)
+					break
+				s:Stack
+				s.push(a)
+				ev_stack.push(s)
+
+			elif tok == 'pop':
+				s = ev_stack.pop()
+				if not isinstance(s,Stack):
+					self.err('TYPE_ERROR',f'push expects arguments <Stack> <Any>, not <{type(s).__name__}> <Any>',line)
+					break
+				if len(s) <= 0:
+					self.err("STACK_ERROR","pop from empty stack",line)
+					break	
+				if isinstance(s,Stack):
+					ev_stack.push(s.pop())
+				
+			elif tok == 'call':
+				if len(ev_stack) < 1:
+					self.err('FUNCTION_CALL_ERROR','No function name on stack',line)
+					break
+				name = ev_stack.pop()
+				if not isinstance(name, str):
+					name = str(name)
+				if name not in self.funcs:
+					self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line)
+					break
+				arg_names = self.funcs[name][0]
+				if len(ev_stack) < len(arg_names):
+					self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line)
+					break
+				arg_vals = [ev_stack.pop() for _ in range(len(arg_names))]
+				arg_vals.reverse()
+				res = self.call_func(name, arg_vals, line=line)
+				if self.error:
+					break
+				if res is not None:
+					ev_stack.push(res)
+				continue
+			elif tok == '?':
+				# COMMENT SHALL IGNORE
+				break
+			elif tok == '!':
+				a = ev_stack.pop()
+				ev_stack.push(a.jogar() if isinstance(a,Die) else a)
+#			elif tok == '%':
+#				a = ev_stack.pop()
+#				b = ev_stack.pop()
+#				ev_stack.push(a.probabilidade(b) if isinstance(a,Die) else (int(a == b)))
+			elif tok in  Ev.simple_ops:
+				if len(ev_stack) < 2:
+					self.err('ARGUMENT_ERROR',f'Not enough arguments for {tok}',line)
+				rh = ev_stack.pop()
+				lh = ev_stack.pop()
+				comp = ['<','<=','>','>=']
+				math = ['+','-','*','/','**']
+				if (isinstance(lh,str) or isinstance(rh,str)) and tok in comp:
+					self.err('TYPE_ERROR',f'Cannot compare string with {type(lh) if isinstance(lh,str) else type(rh)}',line)
+					break
+				if (isinstance(lh,(str,Die,bool)) or isinstance(rh,(str,Die,bool))) and (tok in math or tok in comp):
+					self.err('TYPE_ERROR',f'Cannot perform operation {tok} with {type(lh).__name__} and {type(rh).__name__}',line)
+					break
+				if tok in comp:
+					lh:int|float
+					rh:int|float
+				match tok:
+					#Type Comp
+					case 'T=': ev_stack.push(type(lh)==type(rh))
+					# Math
+					case '+': ev_stack.push(lh + rh)
+					case '-': ev_stack.push(lh - rh)
+					case '*': ev_stack.push(lh * rh)
+					case '/': ev_stack.push(lh / rh)
+					case '**': ev_stack.push(lh ** rh)
+					# Bool
+					case '&&': ev_stack.push(bool(lh) and bool(rh))
+					case '||': ev_stack.push(bool(lh) or bool(rh))
+					#Comp
+					case '==': ev_stack.push(lh == rh)
+					case '!=': ev_stack.push(lh != rh)
+					case '<': ev_stack.push(lh < rh)
+					case '<=': ev_stack.push(lh <= rh)
+					case '>': ev_stack.push(lh > rh)
+					case '>=': ev_stack.push(lh >= rh)
+					# Bitwise
+					case '^': ev_stack.push(lh ^ rh) if isinstance(lh,int) and isinstance(rh,int) else self.err('TYPE_ERROR','Bitwise XOR requires integer or boolean operands')
+			elif tok == '#':
+				print(ev_stack.peek(),end=' ')
+			elif tok == '=':
+				if len(ev_stack) < 2:
+					self.err('VARIABLE_DEFINITION_ERROR',f'Not enough arguments for {tok}',line)
+					break
+				a = ev_stack.pop() # Name
+				b = ev_stack.pop() # Value
+					
+				if not Ev.is_valid_var(a):
+					self.err('VARIABLE_DEFINITION_ERROR',f'Invalid variable name: {repr(a)}',line)
+					break
+				self.vars[a] = b
+			elif tok == '"':
+				self.str_next = True
+			elif tok == 'del':
+				var_name = ev_stack.pop()
+				if var_name in self.vars:
+					del self.vars[var_name]
+				else:
+					self.err('VARIABLE_DELETION_ERROR',f'Can\'t find variable {repr(var_name)} in vars')
+			elif tok == 'vars':
+				print(self.vars)
+			elif tok == 'funcs':
+				print(self.funcs)
+			else:
+				ev_stack.push(str(tok))
+		return ev_stack
+		      
+		
+def main(evaluator:Ev=Ev(),interpreted:str|None=None):
+    if  interpreted is None:
+        interpreted = open(sys.argv[1]).read()
+    evaluator.ev(interpreted)
+if __name__ == "__main__":
+    
+    e = Ev() 
+    main(e)
+   
+## TODO
+# // Is doc string \\
