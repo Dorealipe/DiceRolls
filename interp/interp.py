@@ -2,7 +2,7 @@
 import sys
 from dataStruct import Stack
 from dice import Die,FairDie
-from typing import Any
+from typing import Any, Literal
 
 #from dataStruct import Stack
 def is_number(s):
@@ -213,7 +213,7 @@ class Ev:
 		for tok in toks:
 			if tok == '//':
 				self.comment = True if not self.comment else False
-			if self.comment: break
+			if self.comment: continue
 			if tok == 'read': tok = input("<read> ")
 			if self.str_next:
 				ev_stack.push(str(tok))
@@ -361,20 +361,64 @@ class Ev:
 				ev_stack.push(str(tok))
 		return ev_stack
 	def __str__(self):
-		s = f'''
-			{self.vars};
-			{self.funcs};
-			{int(self.error)}{int(self.comment)}{int(self.str_next)};	
-			'''
+		s = \
+f'''
+{self.vars};
+{self.funcs}; 
+{int(self.error)}{int(self.comment)}{int(self.str_next)};	
+'''
 		return s
-			  
+	def __repr__(self):
+		s = \
+f'''
+V{len(self.vars)};
+F{len(self.funcs)};
+{int(self.error)}{int(self.comment)}{int(self.str_next)}
+'''
+
+		return s
+
+def help(command:Literal[None,'--help']=None):
+	match command:
+		case None:
+			print('~~DiceRolls Interpreter~~')
+			print('--help ~> Provides help for other commands.')
+		case '--help':
+			print('Shows general help or help for a specific command.')
+
+
+def main(evaluator:Ev=Ev()):
+	if len(sys.argv) == 1: # only dr
+		print(help())
+	if len(sys.argv) >= 2:
+		if sys.argv[1][0:2] != '--':	
+			with open(sys.argv[-1]) as interpreted:#argv[0] is dr
+				evaluator.ev(interpreted.read())
+		else:
+			match sys.argv[1]:
+				case '--help':
+					if len(sys.argv) == 3: # dr --help <command>
+						help(sys.argv[2])
+					elif len(sys.argv) == 2: # dr --help
+						help()
+					elif len(sys.argv) > 3:
+						pass #ERROR IMPLEMENTATION
+	
+def test(interpreted:str,evaluator:Ev=Ev()):
+	'''
+	Tests the evaluator for a given string
+	
+	:param evaluator: 
+		The evaluator from the Ev class that will be used, if no evaluator is received, will use a single-use instance of the Ev class. 
 		
-def main(evaluator:Ev=Ev(),interpreted:str|None=None):
-	if  interpreted is None:
-		interpreted = open(sys.argv[1]).read()
+		Can have default variables and functions.
+	:type evaluator: Ev
+	:param interpreted: The str that will be evaluated as DR code
+	:type interpreted: str
+	'''
 	evaluator.ev(interpreted)
 if __name__ == "__main__":
 	
 	e = Ev()
 	main(e)
-   
+
