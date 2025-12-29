@@ -14,7 +14,9 @@ def is_number(s):
 def is_bool(s):
 		return s in ['True','False']
 			
-
+'''
+I have no idea if this is good code
+'''
 class Ev:
 	keywords = ['vars','funcs','stack','push','pop', 'True', 'False', 'read', 'err', '.func','.endfunc','call','.if','.endif','.else','del']
 	operators = ['!','+','-','*','/','**','&&','||','==','!=','=','#','"','--','>','<','>=','<=','T=']
@@ -52,6 +54,7 @@ class Ev:
 		self.vars:Ev.t_vars = varrs
 		self.funcs:Ev.t_funcs = funcs
 		self.str_next = False
+		self.comment = False
 	def call_func(self, name:str, arg_vals:list[Any], line:int=-1):
 		"""Execute a defined function by name with provided argument values.
 		Returns the function's return value (last value on the local stack) or None.
@@ -87,11 +90,11 @@ class Ev:
 		while i < len(lines):
 			line = lines[i].strip()
 
-			if line == '' or line.startswith('?'): #Skip
+			if line == '': #Skips the line
 				i += 1
 				continue
-            
-                    
+			
+					
 			# function definition: .func name arg1 arg2 ...
 			if line.startswith('.func'):
 				parts = line.split()
@@ -204,10 +207,13 @@ class Ev:
 		'''
 
 		toks = expr.split()
-		if '#' in toks:
+		if '#' in toks or 'vars' in toks or 'funcs' in toks:
 			print('',end='\n')
 		ev_stack:Ev.t_stack = Stack() if in_ev_stack is None else in_ev_stack
 		for tok in toks:
+			if tok == '//':
+				self.comment = True if not self.comment else False
+			
 			if tok == 'read': tok = input("<read> ")
 			if self.str_next:
 				ev_stack.push(str(tok))
@@ -354,16 +360,23 @@ class Ev:
 			else:
 				ev_stack.push(str(tok))
 		return ev_stack
-		      
+	def __str__(self):
+		s = f'''
+			{self.vars};
+			{self.funcs};
+			{int(self.error)}{int(self.comment)}{int(self.str_next)};	
+			'''
+		return s
+			  
 		
 def main(evaluator:Ev=Ev(),interpreted:str|None=None):
-    if  interpreted is None:
-        interpreted = open(sys.argv[1]).read()
-    evaluator.ev(interpreted)
+	if  interpreted is None:
+		interpreted = open(sys.argv[1]).read()
+	evaluator.ev(interpreted)
 if __name__ == "__main__":
-    
-    e = Ev() 
-    main(e)
+	
+	e = Ev()
+	main(e)
    
-## TODO
-# // Is doc string \\
+## CHECK
+# // Is doc string //
