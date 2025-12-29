@@ -207,13 +207,13 @@ class Ev:
 		'''
 
 		toks = expr.split()
-		if '#' in toks or 'vars' in toks or 'funcs' in toks:
+		if ('#' in toks or 'vars' in toks or 'funcs' in toks) and not self.comment:
 			print('',end='\n')
 		ev_stack:Ev.t_stack = Stack() if in_ev_stack is None else in_ev_stack
 		for tok in toks:
 			if tok == '//':
 				self.comment = True if not self.comment else False
-			
+			if self.comment: break
 			if tok == 'read': tok = input("<read> ")
 			if self.str_next:
 				ev_stack.push(str(tok))
@@ -378,5 +378,3 @@ if __name__ == "__main__":
 	e = Ev()
 	main(e)
    
-## CHECK
-# // Is doc string //
