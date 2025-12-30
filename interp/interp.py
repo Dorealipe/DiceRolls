@@ -47,9 +47,9 @@ class Ev:
 			if c in Ev.operators:
 				return False
 		return True
-	def err(self,error_type:str='ERROR',message:str='',at:int|None=None):
+	def err(self,error_type:str='ERROR',message:str='',at:int|None=None,in_func:str|None=None):
 		self.quit = True
-		print(Fore.RED + f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}')
+		print(Fore.RED + f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}{f' in function {in_func}' if in_func is not None else ''}')
 	def __init__(self,varrs:t_vars={},funcs:t_funcs=base_funcs):
 		self.quit:bool = False
 		self.vars:Ev.t_vars = varrs
@@ -76,16 +76,15 @@ class Ev:
 		local_stack = Stack()
 		# run in a child evaluator that shares globals (vars and funcs)
 		child = Ev(varrs=self.vars.copy() if isinstance(self.vars,dict) else {}, funcs=self.funcs)
-		for line_dr in body:
-			if line_dr.startswith('?'):
-				continue
-			child.ev_expr(line_dr, local_vars=loc, in_ev_stack=local_stack, line=line)
-			if child.error:
-				self.quit = child.error
-				return None
+		# execute the function body using the child's ev so multi-line
+		# constructs like .if and nested .func work inside functions
+		child.ev('\n'.join(body), local_vars=loc, in_ev_stack=local_stack,in_func=name)
+		if child.quit:
+			self.quit = child.quit
+			return None
 		return local_stack.pop() if local_stack else None
 
-	def ev(self, s:str):
+	def ev(self, s:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None,in_func:str|None=None):
 		
 		lines = s.split('\n')
 		i = 0
@@ -127,11 +126,11 @@ class Ev:
 			if line.startswith(".if"):
 				split = line.split(maxsplit=1)
 				if len(split) < 2:
-					self.err('IF_STATEMENT_ERROR','Missing expression for .if',i+1)
+					self.err('IF_STATEMENT_ERROR','Missing expression for .if',i+1,in_func)
 					i += 1
 					continue
 				expr = split[1]
-				stck = self.ev_expr(expr, line=i+1)
+				stck = self.ev_expr(expr, local_vars=local_vars, in_ev_stack=in_ev_stack, line=i+1)
 				print(Fore.GREEN + str(stck))
 				if not stck or stck.peek() is None:
 					self.err('IF_STATEMENT_ERROR','Expected expression result',i+1)
@@ -190,7 +189,7 @@ class Ev:
 					l = lines[k].rstrip()
 					if l.strip().startswith('?'):
 						continue
-					self.ev_expr(l, line=k+1)
+					self.ev_expr(l, local_vars=local_vars, in_ev_stack=in_ev_stack, line=k+1)
 					if self.quit:
 						return
 				i = end_index + 1
@@ -198,7 +197,7 @@ class Ev:
 
 						
 			# normal line -> evaluate
-			self.ev_expr(line,line=i+1)
+			self.ev_expr(line, local_vars=local_vars, in_ev_stack=in_ev_stack, line=i+1)
 			if self.quit:
 				break
 			i += 1
