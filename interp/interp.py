@@ -3,7 +3,8 @@ import sys
 from dataStruct import Stack
 from dice import Die,FairDie
 from typing import Any, Literal
-
+from colorama import Fore,init
+init(True)
 #from dataStruct import Stack
 def is_number(s):
 		try:
@@ -47,14 +48,15 @@ class Ev:
 				return False
 		return True
 	def err(self,error_type:str='ERROR',message:str='',at:int|None=None):
-		self.error = True
-		print(f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}')
+		self.quit = True
+		print(Fore.RED + f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}')
 	def __init__(self,varrs:t_vars={},funcs:t_funcs=base_funcs):
-		self.error:bool = False
+		self.quit:bool = False
 		self.vars:Ev.t_vars = varrs
 		self.funcs:Ev.t_funcs = funcs
 		self.str_next = False
 		self.comment = False
+		
 	def call_func(self, name:str, arg_vals:list[Any], line:int=-1):
 		"""Execute a defined function by name with provided argument values.
 		Returns the function's return value (last value on the local stack) or None.
@@ -79,7 +81,7 @@ class Ev:
 				continue
 			child.ev_expr(line_dr, local_vars=loc, in_ev_stack=local_stack, line=line)
 			if child.error:
-				self.error = child.error
+				self.quit = child.error
 				return None
 		return local_stack.pop() if local_stack else None
 
@@ -130,6 +132,7 @@ class Ev:
 					continue
 				expr = split[1]
 				stck = self.ev_expr(expr, line=i+1)
+				print(Fore.GREEN + str(stck))
 				if not stck or stck.peek() is None:
 					self.err('IF_STATEMENT_ERROR','Expected expression result',i+1)
 					# skip forward to matching .endif to stay in consistent state
@@ -188,7 +191,7 @@ class Ev:
 					if l.strip().startswith('?'):
 						continue
 					self.ev_expr(l, line=k+1)
-					if self.error:
+					if self.quit:
 						return
 				i = end_index + 1
 				continue
@@ -196,7 +199,7 @@ class Ev:
 						
 			# normal line -> evaluate
 			self.ev_expr(line,line=i+1)
-			if self.error:
+			if self.quit:
 				break
 			i += 1
 
@@ -207,8 +210,7 @@ class Ev:
 		'''
 
 		toks = expr.split()
-		if ('#' in toks or 'vars' in toks or 'funcs' in toks) and not self.comment:
-			print('',end='\n')
+		
 		ev_stack:Ev.t_stack = Stack() if in_ev_stack is None else in_ev_stack
 		for tok in toks:
 			if tok == '//':
@@ -236,7 +238,7 @@ class Ev:
 				ev_stack.push(self.vars[tok])
 			elif tok == '--':
 				a = ev_stack.pop()
-				ev_stack.push((- a) if isinstance(a,float|int) else not a )
+				ev_stack.push((- a) if isinstance(a,float|int) and not isinstance(a,bool) else not a )
 			elif tok == 'stack':
 				ev_stack.push(Stack())
 			elif tok == 'push':
@@ -280,7 +282,7 @@ class Ev:
 				arg_vals = [ev_stack.pop() for _ in range(len(arg_names))]
 				arg_vals.reverse()
 				res = self.call_func(name, arg_vals, line=line)
-				if self.error:
+				if self.quit:
 					break
 				if res is not None:
 					ev_stack.push(res)
@@ -305,7 +307,7 @@ class Ev:
 				if (isinstance(lh,str) or isinstance(rh,str)) and tok in comp:
 					self.err('TYPE_ERROR',f'Cannot compare string with {type(lh) if isinstance(lh,str) else type(rh)}',line)
 					break
-				if (isinstance(lh,(str,Die,bool)) or isinstance(rh,(str,Die,bool))) and (tok in math or tok in comp):
+				if (isinstance(lh,(str,Stack,Die,bool)) or isinstance(rh,(str,Stack,Die,bool))) and (tok in math or tok in comp):
 					self.err('TYPE_ERROR',f'Cannot perform operation {tok} with {type(lh).__name__} and {type(rh).__name__}',line)
 					break
 				if tok in comp:
@@ -333,7 +335,10 @@ class Ev:
 					# Bitwise
 					case '^': ev_stack.push(lh ^ rh) if isinstance(lh,int) and isinstance(rh,int) else self.err('TYPE_ERROR','Bitwise XOR requires integer or boolean operands')
 			elif tok == '#':
-				print(ev_stack.peek(),end=' ')
+				if len(ev_stack) == 0:
+					self.err('PRINT_ERROR','Nothing to print',line)
+					break
+				print(Fore.YELLOW + str(ev_stack.peek()),end=' ')
 			elif tok == '=':
 				if len(ev_stack) < 2:
 					self.err('VARIABLE_DEFINITION_ERROR',f'Not enough arguments for {tok}',line)
@@ -353,19 +358,23 @@ class Ev:
 					del self.vars[var_name]
 				else:
 					self.err('VARIABLE_DELETION_ERROR',f'Can\'t find variable {repr(var_name)} in vars')
+			elif tok == 'quit':
+				self.quit = True
 			elif tok == 'vars':
-				print(self.vars)
+				print(Fore.MAGENTA + str(self.vars))
 			elif tok == 'funcs':
-				print(self.funcs)
+				print(Fore.MAGENTA + str(self.funcs))
 			else:
 				ev_stack.push(str(tok))
+		if ('#' in toks or 'vars' in toks or 'funcs' in toks) and not self.comment:
+			print('',end='\n')
 		return ev_stack
 	def __str__(self):
 		s = \
 f'''
 {self.vars};
 {self.funcs}; 
-{int(self.error)}{int(self.comment)}{int(self.str_next)};	
+{int(self.quit)}{int(self.comment)}{int(self.str_next)};	
 '''
 		return s
 	def __repr__(self):
@@ -373,7 +382,7 @@ f'''
 f'''
 V{len(self.vars)};
 F{len(self.funcs)};
-{int(self.error)}{int(self.comment)}{int(self.str_next)}
+{int(self.quit)}{int(self.comment)}{int(self.str_next)}
 '''
 
 		return s
@@ -389,7 +398,9 @@ def help(command:Literal[None,'--help']=None):
 
 def main(evaluator:Ev=Ev()):
 	if len(sys.argv) == 1: # only dr
-		print(help())
+		print('DiceRolls interpreter running, note that it doesn\'t support .if or .func')
+		while not evaluator.quit:
+			evaluator.ev_expr(input(Fore.LIGHTBLUE_EX+'>> '+Fore.RESET))
 	if len(sys.argv) >= 2:
 		if sys.argv[1][0:2] != '--':	
 			with open(sys.argv[-1]) as interpreted:#argv[0] is dr
