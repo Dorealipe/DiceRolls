@@ -59,21 +59,21 @@ class Ev:
 		self.str_next = False
 		self.comment = False
 		
-	def call_func(self, name:str, arg_vals:list[Any], line:int=-1):
+	def call_func(self, name:str, arg_vals:list[Any], line:int=-1,func:tuple[str,int]|None=None):
 		"""Execute a defined function by name with provided argument values.
 		Returns the function's return value (last value on the local stack) or None.
 		Sets evaluator error state on failure.
 		"""
 		f = (name,line) # name, called
 		if name not in self.funcs:
-			self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line)
+			self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line,func)
 			return None
 		arg_names, body = self.funcs[name]
 		if len(arg_vals) < len(arg_names):
-			self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line)
+			self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line,func)
 			return None
 		if len(arg_vals) > len(arg_names):
-			self.err('ARGUMENT_ERROR',f'Too many arguments for function {repr(name)}',line)
+			self.err('ARGUMENT_ERROR',f'Too many arguments for function {repr(name)}',line,func)
 			return None
 		loc = dict(zip(arg_names, arg_vals))
 		local_stack = Stack()
@@ -87,7 +87,7 @@ class Ev:
 			return None
 		return local_stack.pop() if local_stack else None
 
-	def ev(self, s:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None,func:str|None=None):
+	def ev(self, s:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None,func:tuple[str,int]|None=None):
 		
 		lines = s.split('\n')
 		i = 0
@@ -103,7 +103,7 @@ class Ev:
 			if line.startswith('.func'):
 				parts = line.split()
 				if len(parts) < 2: # <= 1 
-					self.err('FUNCTION_DEFINITION_ERROR', f'malformed .func header',i+1)
+					self.err('FUNCTION_DEFINITION_ERROR', f'malformed .func header',i+1,func)
 					return
 				# parts[0] is '.func'
 				name = parts[1]
@@ -271,9 +271,7 @@ class Ev:
 				if len(ev_stack) < 1:
 					self.err('FUNCTION_CALL_ERROR','No function name on stack',line,func)
 					break
-				name = ev_stack.pop()
-				if not isinstance(name, str):
-					name = str(name)
+				name = str(ev_stack.pop())
 				if name not in self.funcs:
 					self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line,func)
 					break
@@ -283,7 +281,7 @@ class Ev:
 					break
 				arg_vals = [ev_stack.pop() for _ in range(len(arg_names))]
 				arg_vals.reverse()
-				res = self.call_func(name, arg_vals, line=line)
+				res = self.call_func(name, arg_vals, line=line,func=func)
 				if self.quit:
 					break
 				if res is not None:
