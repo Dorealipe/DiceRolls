@@ -385,9 +385,9 @@ class Ev:
 			elif tok == 'quit':
 				self.quit = True
 			elif tok == 'vars':
-				print(Fore.MAGENTA + str(self.vars))
+				print(Fore.MAGENTA + str(self.vars.items()))
 			elif tok == 'funcs':
-				print(Fore.MAGENTA + str(self.funcs))
+				print(Fore.MAGENTA + str(self.funcs.items()))
 			else:
 				ev_stack.push(str(tok))
 		if ('#' in toks or 'vars' in toks or 'funcs' in toks) and not self.comment:
@@ -404,7 +404,7 @@ def help(command:Literal[None,'--help']=None):
 			print('Shows general help or help for a specific command.')
 
 def console(evaluator:Ev=Ev()):
-	print('DiceRolls interpreter running, note that it doesn\'t support .if or .func')
+	print('DiceRolls interpreter running, note that it doesn\'t support dot keywords')
 	while not evaluator.quit:
 		command = input(Fore.LIGHTBLUE_EX+'>> '+Fore.RESET)
 		evaluator.ev_expr(command)
