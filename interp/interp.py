@@ -3,7 +3,9 @@ import sys
 from dataStruct import Stack
 from dice import Die,FairDie
 from typing import Any, Literal
-
+from colorama import Fore,init
+from pathlib import Path
+init(True)
 #from dataStruct import Stack
 def is_number(s):
 		try:
@@ -31,7 +33,26 @@ class Ev:
 			["stackType"],
 			["stackType pop n =",
 			"stackType n push",
-			"n"])
+			"n"]),
+		'getType': (
+			['t'],
+			['type type =',
+			 '.if t 0 T=',
+			 'Integer type =',
+			 '.else',
+			 '    .if t 0.5f T=',
+			 '    Float type =',
+			 '    .else',
+			 '        .if t " String T=',
+			 '        String type =',
+			 '        .else',
+			 '            .if t stack T=',
+			 '            Stack type =',
+			 '            .endif',
+			 '        .endif',
+			 '    .endif',
+			 '.endif',
+			 'type'])
 		}
 	
 	@staticmethod
@@ -46,44 +67,54 @@ class Ev:
 			if c in Ev.operators:
 				return False
 		return True
-	def err(self,error_type:str='ERROR',message:str='',at:int|None=None):
-		self.error = True
-		print(f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}')
+	def err(self,error_type:str='ERROR',message:str='',at:int|None=None,func:tuple[str,int]|None=None):
+		self.quit = True
+		if func:
+			print(Fore.RED+f'At {func[1]}:')
+		print(Fore.RED + f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}{f' in function {func[0]}' if func is not None else ''}')
 	def __init__(self,varrs:t_vars={},funcs:t_funcs=base_funcs):
-		self.error:bool = False
+		self.quit:bool = False
 		self.vars:Ev.t_vars = varrs
 		self.funcs:Ev.t_funcs = funcs
 		self.str_next = False
 		self.comment = False
-	def call_func(self, name:str, arg_vals:list[Any], line:int=-1):
+	def import_dr(self,imported:str):
+		p = Path(__file__) # .../DiceRolls/interp/interp.py
+		p = p.owner()
+		print(p)
+		with open(imported,'r') as f:
+			self.ev(f.read())
+	def call_func(self, name:str, arg_vals:list[Any], line:int=-1,func:tuple[str,int]|None=None):
 		"""Execute a defined function by name with provided argument values.
 		Returns the function's return value (last value on the local stack) or None.
 		Sets evaluator error state on failure.
 		"""
+		f = (name,line) # name, called
 		if name not in self.funcs:
-			self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line)
+			self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line,func)
 			return None
 		arg_names, body = self.funcs[name]
 		if len(arg_vals) < len(arg_names):
-			self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line)
+			self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line,func)
 			return None
 		if len(arg_vals) > len(arg_names):
-			self.err('ARGUMENT_ERROR',f'Too many arguments for function {repr(name)}',line)
+			self.err('ARGUMENT_ERROR',f'Too many arguments for function {repr(name)}',line,func)
 			return None
 		loc = dict(zip(arg_names, arg_vals))
 		local_stack = Stack()
 		# run in a child evaluator that shares globals (vars and funcs)
 		child = Ev(varrs=self.vars.copy() if isinstance(self.vars,dict) else {}, funcs=self.funcs)
-		for line_dr in body:
-			if line_dr.startswith('?'):
-				continue
-			child.ev_expr(line_dr, local_vars=loc, in_ev_stack=local_stack, line=line)
-			if child.error:
-				self.error = child.error
-				return None
+		# execute the function body using the child's ev so multi-line
+		# constructs like .if and nested .func work inside functions
+		child.ev('\n'.join(body), local_vars=loc, in_ev_stack=local_stack,func=f)
+		if child.quit:
+			self.quit = child.quit
+			return None
 		return local_stack.pop() if local_stack else None
-
-	def ev(self, s:str):
+	def log(self,*args:Any,sep:str=', '):
+		sargs = [str(i) for i in args]
+		print(Fore.GREEN+sep.join(sargs))
+	def ev(self, s:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None,func:tuple[str,int]|None=None):
 		
 		lines = s.split('\n')
 		i = 0
@@ -99,7 +130,7 @@ class Ev:
 			if line.startswith('.func'):
 				parts = line.split()
 				if len(parts) < 2: # <= 1 
-					self.err('FUNCTION_DEFINITION_ERROR', f'malformed .func header',i+1)
+					self.err('FUNCTION_DEFINITION_ERROR', f'malformed .func header',i+1,func)
 					return
 				# parts[0] is '.func'
 				name = parts[1]
@@ -125,13 +156,13 @@ class Ev:
 			if line.startswith(".if"):
 				split = line.split(maxsplit=1)
 				if len(split) < 2:
-					self.err('IF_STATEMENT_ERROR','Missing expression for .if',i+1)
+					self.err('IF_STATEMENT_ERROR','Missing expression for .if',i+1,func)
 					i += 1
 					continue
 				expr = split[1]
-				stck = self.ev_expr(expr, line=i+1)
-				if not stck or stck.peek() is None:
-					self.err('IF_STATEMENT_ERROR','Expected expression result',i+1)
+				stck = self.ev_expr(expr, local_vars=local_vars, in_ev_stack=in_ev_stack, line=i+1,func=func)
+				if not stck:
+					self.err('IF_STATEMENT_ERROR','Expected expression result',i+1,func=func)
 					# skip forward to matching .endif to stay in consistent state
 					level = 0
 					j = i + 1
@@ -145,7 +176,7 @@ class Ev:
 							level -= 1
 						j += 1
 					if j >= len(lines):
-						self.err('IF_STATEMENT_ERROR','Unterminated if statement',i+1)
+						self.err('IF_STATEMENT_ERROR','Unterminated if statement',func=func)
 						return
 					i = j + 1
 					continue
@@ -169,7 +200,7 @@ class Ev:
 						else_index = j
 					j += 1
 				if end_index == -1:
-					self.err('IF_STATEMENT_ERROR','Unterminated if statement',i+1)
+					self.err('IF_STATEMENT_ERROR','Unterminated if statement',i+1,func)
 					return
 				# choose which block to execute
 				if cond:
@@ -182,33 +213,29 @@ class Ev:
 						continue
 					start = else_index + 1
 					stop = end_index
-				# execute lines[start:stop]
-				for k in range(start, stop):
-					l = lines[k].rstrip()
-					if l.strip().startswith('?'):
-						continue
-					self.ev_expr(l, line=k+1)
-					if self.error:
-						return
+				# execute selected block using ev so nested statements are handled
+				block = '\n'.join(lines[start:stop])
+				self.ev(block, local_vars=local_vars, in_ev_stack=in_ev_stack, func=func)
+				if self.quit:
+					return
 				i = end_index + 1
 				continue
 
 						
 			# normal line -> evaluate
-			self.ev_expr(line,line=i+1)
-			if self.error:
+			self.ev_expr(line, local_vars=local_vars, in_ev_stack=in_ev_stack, line=i+1, func=func)
+			if self.quit:
 				break
 			i += 1
 
-	def ev_expr(self, expr:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None, line:int=-1):
+	def ev_expr(self, expr:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None, line:int=-1,func:str|None=None):
 		'''
 		Evaluate a single expression line in the given context.
 		Supports local variables and a provided stack.
 		'''
 
 		toks = expr.split()
-		if ('#' in toks or 'vars' in toks or 'funcs' in toks) and not self.comment:
-			print('',end='\n')
+		
 		ev_stack:Ev.t_stack = Stack() if in_ev_stack is None else in_ev_stack
 		for tok in toks:
 			if tok == '//':
@@ -221,10 +248,10 @@ class Ev:
 				continue
 			if tok == 'err':
 				a = ev_stack.pop()
-				self.err('EXCEPTION',str(a),line)
+				self.err(str(a),line,func)
 				break
 			elif tok[0] == 'd' and tok[1:].isdigit(): ev_stack.push(FairDie(tok))
-			elif tok[:-1].isdecimal() and tok[-1].lower() == 'f':
+			elif tok[:-1].replace('.','').isdecimal() and tok[-1].lower() == 'f':
 				ev_stack.push(float(tok[:-1]))
 			elif is_number(tok):
 				ev_stack.push(int(tok))
@@ -236,7 +263,7 @@ class Ev:
 				ev_stack.push(self.vars[tok])
 			elif tok == '--':
 				a = ev_stack.pop()
-				ev_stack.push((- a) if isinstance(a,float|int) else not a )
+				ev_stack.push((- a) if isinstance(a,float|int) and not isinstance(a,bool) else not a )
 			elif tok == 'stack':
 				ev_stack.push(Stack())
 			elif tok == 'push':
@@ -255,32 +282,31 @@ class Ev:
 			elif tok == 'pop':
 				s = ev_stack.pop()
 				if not isinstance(s,Stack):
-					self.err('TYPE_ERROR',f'push expects arguments <Stack> <Any>, not <{type(s).__name__}> <Any>',line)
+					self.err('TYPE_ERROR',f'push expects arguments <Stack> <Any>, not <{type(s).__name__}> <Any>',line,func)
 					break
 				if len(s) <= 0:
-					self.err("STACK_ERROR","pop from empty stack",line)
+					self.err("STACK_ERROR","pop from empty stack",line,func)
 					break	
 				if isinstance(s,Stack):
 					ev_stack.push(s.pop())
 				
 			elif tok == 'call':
 				if len(ev_stack) < 1:
-					self.err('FUNCTION_CALL_ERROR','No function name on stack',line)
+					self.err('FUNCTION_CALL_ERROR','No function name on stack',line,func)
 					break
-				name = ev_stack.pop()
-				if not isinstance(name, str):
-					name = str(name)
+				name = str(ev_stack.pop())
+
 				if name not in self.funcs:
-					self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line)
+					self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line,func)
 					break
 				arg_names = self.funcs[name][0]
 				if len(ev_stack) < len(arg_names):
-					self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line)
+					self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line,func)
 					break
 				arg_vals = [ev_stack.pop() for _ in range(len(arg_names))]
 				arg_vals.reverse()
-				res = self.call_func(name, arg_vals, line=line)
-				if self.error:
+				res = self.call_func(name, arg_vals, line=line,func=func)
+				if self.quit:
 					break
 				if res is not None:
 					ev_stack.push(res)
@@ -303,10 +329,10 @@ class Ev:
 				comp = ['<','<=','>','>=']
 				math = ['+','-','*','/','**']
 				if (isinstance(lh,str) or isinstance(rh,str)) and tok in comp:
-					self.err('TYPE_ERROR',f'Cannot compare string with {type(lh) if isinstance(lh,str) else type(rh)}',line)
+					self.err('TYPE_ERROR',f'Cannot compare string with {type(lh) if isinstance(lh,str) else type(rh)}',line,func)
 					break
-				if (isinstance(lh,(str,Die,bool)) or isinstance(rh,(str,Die,bool))) and (tok in math or tok in comp):
-					self.err('TYPE_ERROR',f'Cannot perform operation {tok} with {type(lh).__name__} and {type(rh).__name__}',line)
+				if (isinstance(lh,(str,Stack,Die,bool)) or isinstance(rh,(str,Stack,Die,bool))) and (tok in math or tok in comp):
+					self.err('TYPE_ERROR',f'Cannot perform operation {tok} with {type(lh).__name__} and {type(rh).__name__}',line,func)
 					break
 				if tok in comp:
 					lh:int|float
@@ -331,18 +357,21 @@ class Ev:
 					case '>': ev_stack.push(lh > rh)
 					case '>=': ev_stack.push(lh >= rh)
 					# Bitwise
-					case '^': ev_stack.push(lh ^ rh) if isinstance(lh,int) and isinstance(rh,int) else self.err('TYPE_ERROR','Bitwise XOR requires integer or boolean operands')
+					case '^': ev_stack.push(lh ^ rh) if isinstance(lh,int) and isinstance(rh,int) else self.err('TYPE_ERROR','Bitwise XOR requires integer or boolean operands',line,func)
 			elif tok == '#':
-				print(ev_stack.peek(),end=' ')
+				if len(ev_stack) == 0:
+					self.err('PRINT_ERROR','Nothing to print',line,func)
+					break
+				print(Fore.YELLOW + repr(ev_stack.peek()),end=' ')
 			elif tok == '=':
 				if len(ev_stack) < 2:
-					self.err('VARIABLE_DEFINITION_ERROR',f'Not enough arguments for {tok}',line)
+					self.err('VARIABLE_DEFINITION_ERROR',f'Not enough arguments for {tok}',line,func)
 					break
 				a = ev_stack.pop() # Name
 				b = ev_stack.pop() # Value
 					
 				if not Ev.is_valid_var(a):
-					self.err('VARIABLE_DEFINITION_ERROR',f'Invalid variable name: {repr(a)}',line)
+					self.err('VARIABLE_DEFINITION_ERROR',f'Invalid variable name: {repr(a)}',line,func)
 					break
 				self.vars[a] = b
 			elif tok == '"':
@@ -353,30 +382,18 @@ class Ev:
 					del self.vars[var_name]
 				else:
 					self.err('VARIABLE_DELETION_ERROR',f'Can\'t find variable {repr(var_name)} in vars')
+			elif tok == 'quit':
+				self.quit = True
 			elif tok == 'vars':
-				print(self.vars)
+				print(Fore.MAGENTA + str(self.vars))
 			elif tok == 'funcs':
-				print(self.funcs)
+				print(Fore.MAGENTA + str(self.funcs))
 			else:
 				ev_stack.push(str(tok))
+		if ('#' in toks or 'vars' in toks or 'funcs' in toks) and not self.comment:
+			print('',end='\n')
 		return ev_stack
-	def __str__(self):
-		s = \
-f'''
-{self.vars};
-{self.funcs}; 
-{int(self.error)}{int(self.comment)}{int(self.str_next)};	
-'''
-		return s
-	def __repr__(self):
-		s = \
-f'''
-V{len(self.vars)};
-F{len(self.funcs)};
-{int(self.error)}{int(self.comment)}{int(self.str_next)}
-'''
-
-		return s
+	
 
 def help(command:Literal[None,'--help']=None):
 	match command:
@@ -386,23 +403,33 @@ def help(command:Literal[None,'--help']=None):
 		case '--help':
 			print('Shows general help or help for a specific command.')
 
+def console(evaluator:Ev=Ev()):
+	print('DiceRolls interpreter running, note that it doesn\'t support .if or .func')
+	while not evaluator.quit:
+		command = input(Fore.LIGHTBLUE_EX+'>> '+Fore.RESET)
+		evaluator.ev_expr(command)
+		# TODO Check signals
 
 def main(evaluator:Ev=Ev()):
 	if len(sys.argv) == 1: # only dr
-		print(help())
+		console(evaluator)
+		
+
 	if len(sys.argv) >= 2:
 		if sys.argv[1][0:2] != '--':	
 			with open(sys.argv[-1]) as interpreted:#argv[0] is dr
 				evaluator.ev(interpreted.read())
 		else:
 			match sys.argv[1]:
+				case '--':
+					console(evaluator)
 				case '--help':
 					if len(sys.argv) == 3: # dr --help <command>
 						help(sys.argv[2])
 					elif len(sys.argv) == 2: # dr --help
 						help()
-					elif len(sys.argv) > 3:
-						pass #ERROR IMPLEMENTATION
+					elif len(sys.argv) > 3: 
+						evaluator.err('ARGUMENT_ERROR','Too many arguments for --help') #ERROR IMPLEMENTATION
 	
 def test(interpreted:str,evaluator:Ev=Ev()):
 	'''
@@ -421,4 +448,3 @@ if __name__ == "__main__":
 	
 	e = Ev()
 	main(e)
-

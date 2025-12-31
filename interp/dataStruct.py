@@ -58,6 +58,10 @@ class Stack(Generic[_T]):
 		self.head = node.next 
 		self.__size -= 1
 		return node.value
+	def peek(self):
+		if self.head is None:
+			raise IndexError('peek empty stack')
+		return self.head.value
 	def __iter__(self):
 		n = self.head
 		while n is not None:
