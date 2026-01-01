@@ -68,11 +68,11 @@ class Stack(Generic[_T]):
 			yield n.value
 			n = n.next
 	def __str__(self):
-		return f'Stack{[i for i in self]}'
+		return f'Stack{[i if i is not self else '...' for i in self]}'
 	def __len__(self):
 		return self.__size
 	def __repr__(self):
-		return f'S:{[i for i in self]}'
+		return f'S:{[i if i is not self else '...' for i in self]}'
 	def __reversed__(self):
 		s=Stack()
 		for i in self:

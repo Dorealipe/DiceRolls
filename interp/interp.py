@@ -1,5 +1,5 @@
 #Dice Interpreter .dr
-import sys
+import sys, os
 from dataStruct import Stack
 from dice import Die,FairDie
 from typing import Any, Literal
@@ -20,40 +20,15 @@ def is_bool(s):
 I have no idea if this is good code
 '''
 class Ev:
-	keywords = ['vars','funcs','stack','push','pop', 'True', 'False', 'read', 'err', '.func','.endfunc','call','.if','.endif','.else','del']
-	operators = ['!','+','-','*','/','**','&&','||','==','!=','=','#','"','--','>','<','>=','<=','T=']
+	keywords = ['vars','funcs','stack','push','pop', 'True', 'False', 'read', 'err', '.func','.endfunc','call','.if','.endif','.else','del','import']
+	operators = ['!','+','-','*','/','**','&&','||','==','!=','=','#','"','--','>','<','>=','<=','T=','//','?']
 	simple_ops = ['+','-','*','/','**','&&','||','==','!=','>','<','>=','<=','T='] # 2 inputs 1 operation
 	
 	t_stack = Stack[Any]
 	t_func = tuple[list[str],list[str]] # (['arg1','arg2'],['arg1 arg2 +'])
 	t_vars = dict[str,Any]
 	t_funcs = dict[str,t_func]
-	base_funcs = {
-		"peekStack":(
-			["stackType"],
-			["stackType pop n =",
-			"stackType n push",
-			"n"]),
-		'getType': (
-			['t'],
-			['type type =',
-			 '.if t 0 T=',
-			 'Integer type =',
-			 '.else',
-			 '    .if t 0.5f T=',
-			 '    Float type =',
-			 '    .else',
-			 '        .if t " String T=',
-			 '        String type =',
-			 '        .else',
-			 '            .if t stack T=',
-			 '            Stack type =',
-			 '            .endif',
-			 '        .endif',
-			 '    .endif',
-			 '.endif',
-			 'type'])
-		}
+	
 	
 	@staticmethod
 	def is_valid_var(name:str)->bool:
@@ -72,17 +47,20 @@ class Ev:
 		if func:
 			print(Fore.RED+f'At {func[1]}:')
 		print(Fore.RED + f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}{f' in function {func[0]}' if func is not None else ''}')
-	def __init__(self,varrs:t_vars={},funcs:t_funcs=base_funcs):
+	def __init__(self,varrs:t_vars={},funcs:t_funcs={}):
+		
+		self.force_quit:bool = False
 		self.quit:bool = False
 		self.vars:Ev.t_vars = varrs
 		self.funcs:Ev.t_funcs = funcs
 		self.str_next = False
 		self.comment = False
+		self.import_dr('stdlib')
 	def import_dr(self,imported:str):
-		p = Path(__file__) # .../DiceRolls/interp/interp.py
-		p = p.owner()
-		print(p)
-		with open(imported,'r') as f:
+		p = Path(__file__).parent
+		p /= imported
+		p = p.with_suffix('.dr') 
+		with open(p) as f:
 			self.ev(f.read())
 	def call_func(self, name:str, arg_vals:list[Any], line:int=-1,func:tuple[str,int]|None=None):
 		"""Execute a defined function by name with provided argument values.
@@ -363,6 +341,11 @@ class Ev:
 					self.err('PRINT_ERROR','Nothing to print',line,func)
 					break
 				print(Fore.YELLOW + repr(ev_stack.peek()),end=' ')
+			elif tok == 'import':
+				if len(ev_stack) == 0:
+					self.err('IMPORTING_ERROR','Expected expression',line,func)
+				file = ev_stack.pop()
+				self.import_dr(file)
 			elif tok == '=':
 				if len(ev_stack) < 2:
 					self.err('VARIABLE_DEFINITION_ERROR',f'Not enough arguments for {tok}',line,func)
@@ -383,11 +366,11 @@ class Ev:
 				else:
 					self.err('VARIABLE_DELETION_ERROR',f'Can\'t find variable {repr(var_name)} in vars')
 			elif tok == 'quit':
-				self.quit = True
+				self.quit = self.force_quit = True
 			elif tok == 'vars':
-				print(Fore.MAGENTA + str(self.vars.items()))
+				print(Fore.MAGENTA + str(list(self.vars.keys())))
 			elif tok == 'funcs':
-				print(Fore.MAGENTA + str(self.funcs.items()))
+				print(Fore.MAGENTA + str(list(self.funcs.keys())))
 			else:
 				ev_stack.push(str(tok))
 		if ('#' in toks or 'vars' in toks or 'funcs' in toks) and not self.comment:
@@ -405,7 +388,7 @@ def help(command:Literal[None,'--help']=None):
 
 def console(evaluator:Ev=Ev()):
 	print('DiceRolls interpreter running, note that it doesn\'t support dot keywords')
-	while not evaluator.quit:
+	while not evaluator.force_quit:
 		command = input(Fore.LIGHTBLUE_EX+'>> '+Fore.RESET)
 		evaluator.ev_expr(command)
 		# TODO Check signals
@@ -429,7 +412,7 @@ def main(evaluator:Ev=Ev()):
 					elif len(sys.argv) == 2: # dr --help
 						help()
 					elif len(sys.argv) > 3: 
-						evaluator.err('ARGUMENT_ERROR','Too many arguments for --help') #ERROR IMPLEMENTATION
+						evaluator.err('ARGUMENT_ERROR','Too many arguments for --help')
 	
 def test(interpreted:str,evaluator:Ev=Ev()):
 	'''
