@@ -58,17 +58,21 @@ class Stack(Generic[_T]):
 		self.head = node.next 
 		self.__size -= 1
 		return node.value
+	def peek(self):
+		if self.head is None:
+			raise IndexError('peek empty stack')
+		return self.head.value
 	def __iter__(self):
 		n = self.head
 		while n is not None:
 			yield n.value
 			n = n.next
 	def __str__(self):
-		return f'Stack{[i for i in self]}'
+		return f'Stack{[i if i is not self else '...' for i in self]}'
 	def __len__(self):
 		return self.__size
 	def __repr__(self):
-		return f'S:{[i for i in self]}'
+		return f'S:{[i if i is not self else '...' for i in self]}'
 	def __reversed__(self):
 		s=Stack()
 		for i in self:

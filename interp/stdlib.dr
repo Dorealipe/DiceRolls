@@ -1,0 +1,26 @@
+? stdlib.dr
+.func peekStack stackType
+stackType pop n =
+stackType n push
+n
+.endfunc
+
+.func getType t
+type type =
+.if t 0 T=
+" Integer type =
+.else
+	.if t 0.5f T=
+	" Float type =
+	.else
+		.if t " String T=
+		" String type =
+		.else
+			.if t stack T=
+			" Stack type =
+			.endif
+		.endif
+	.endif
+.endif
+type
+.endfunc
