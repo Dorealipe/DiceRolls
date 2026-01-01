@@ -57,7 +57,7 @@ class Ev:
 		self.comment = False
 		self.import_dr('stdlib')
 	def import_dr(self,imported:str):
-		p = Pat.cwd()
+		p = Path.cwd()
 		p /= imported
 		p = p.with_suffix('.dr') 
 		with open(p) as f:
@@ -431,3 +431,4 @@ if __name__ == "__main__":
 	
 	e = Ev()
 	main(e)
+
