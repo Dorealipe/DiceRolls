@@ -55,9 +55,9 @@ class Ev:
 		self.funcs:Ev.t_funcs = funcs
 		self.str_next = False
 		self.comment = False
-		self.import_dr('stdlib')
-	def import_dr(self,imported:str):
-		p = Path.cwd()
+		self.import_dr('stdlib',True)
+	def import_dr(self,imported:str,baselib:bool=False):
+		p = Path.cwd() if not baselib else Path(__file__).parent
 		p /= imported
 		p = p.with_suffix('.dr') 
 		with open(p) as f:
