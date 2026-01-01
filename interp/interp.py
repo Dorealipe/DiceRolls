@@ -1,5 +1,5 @@
 #Dice Interpreter .dr
-import sys, os
+import sys
 from dataStruct import Stack
 from dice import Die,FairDie
 from typing import Any, Literal
@@ -57,7 +57,7 @@ class Ev:
 		self.comment = False
 		self.import_dr('stdlib')
 	def import_dr(self,imported:str):
-		p = Path(__file__).parent
+		p = Pat.cwd()
 		p /= imported
 		p = p.with_suffix('.dr') 
 		with open(p) as f:
