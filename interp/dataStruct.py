@@ -1,6 +1,9 @@
 from typing import Generic, TypeVar as typeVar,Any,Callable, Optional, Iterable, Literal
+from collections.abc import MutableMapping
 _T = typeVar('_T',default=Any)
 _T2 = typeVar("_T2",default=Any)
+
+
 
 class Node(Generic[_T]):
 	def __init__(self,value:_T):
@@ -21,19 +24,7 @@ class Node(Generic[_T]):
 	def __repr__(self):
 		return str(self)
 		  
-class TreeNode(Generic[_T]):
-	def __init__(self,value:_T):
-		self.value = value
-		self.left:Optional[TreeNode[_T]] = None
-		self.right:Optional[TreeNode[_T]] = None
-	def swap_children(self):
-		self.left,self.right = self.right, self.left
-	
-	def __repr__(self):
-		center = f'TN:{self.value}'
-		left = f'({self.left}) <- ' if self.left is not None else ''
-		right = f' -> ({self.right})' if self.right is not None else ''
-		return left + center + right
+
 		
 	
 
@@ -137,54 +128,36 @@ class Queue(Generic[_T]):
 		return q
 	def __len__(self):
 		return self.__size		
-class BinaryTree:
-	OptNode = Optional[TreeNode[float]]
-	def __init__(self):
-		self.root: BinaryTree.OptNode = None
-	def insert(self,value:float):
-		
-		def _m(node:BinaryTree.OptNode):
-			if value < node.value:
-				return 'l'
-			if value > node.value:
-				return 'r'
-		
-		self.__insert(self.root,value,_m)
-	
-	def __insert(tree,node:OptNode,value:_T,metric:Callable[[TreeNode[_T]],Literal['l','r']]):
-		if node is None:
-			node = TreeNode(value)
-			if tree.root is None: tree.root = node
-			return node
-		
-		if metric(node) == 'l':
-			if node.left is not None:
-				tree.__insert(node.left,value,metric)
-			else:
-				node.left = TreeNode(value)
-		if metric(node) == 'r':
-			if node.right is not None:
-				tree.__insert(node.right,value,metric)
-				
-			else:
-				node.right = TreeNode(value)
-	def __len_line(self) -> tuple[int,int]:
-		nr = nl = 0
-		nodel = noder = self.root
-		while nodel.left != None:
-			nodel = nodel.left
-			nl += 1
-		while noder.right != None:
-			noder = noder.right
-			nr += 1
-		return (nl,nr)
+class MutableView(MutableMapping):
+	def __init__(self,view_type:type,storage:dict):	
+		self.view_type = view_type
+		self.storage = storage
 
+	def __getitem__(self, key):
+		v = self.storage[key]
+		if not (isinstance(v, self.view_type) if self.view_type is not Any else True):
+			raise KeyError(key)
+		return v
+	def __setitem__(self, key, value):
+		if not (isinstance(value, self.view_type) if self.view_type is not Any else True):
+			raise TypeError(f"value must be {self.view_type.__name__} not {type(value).__name__} \"{value}\"")
+		self.storage[key] = value
+	def __delitem__(self, key):
+		if key in self.storage and (isinstance(self.storage[key], self.view_type) if self.view_type is not Any else True):
+			del self.storage[key]
+		else:
+			raise KeyError(key)
+	def __iter__(self):
+		for k, v in self.storage.items():
+			if (isinstance(v, self.view_type) if self.view_type is not Any else True):
+					yield k
+	def __len__(self):
+		return sum(1 for _ in self.__iter__())
+	def __contains__(self, key):
+		return key in self.storage and isinstance(key,self.view_type)
 
-		
-	def __str__(self):
-		return str(self.root)
-
-			
+	def __repr__(self):
+		return repr({k: self.storage[k] for k in self})
 			
 
 
@@ -215,19 +188,8 @@ class HashMap(Generic[_T2,_T]):
 		return len(self.__items)
 			
 
-def main():
-	t = BinaryTree()
-	t.insert(0)
-	print(t)
-	t.insert(7)
-	print(t)
-	t.insert(-4)
-	print(t)
-	t.insert(4)
-	print(t)
-	t.insert(-2)
-	print(t)
-	
+def test():
+	pass
 
 		
 		
@@ -235,6 +197,6 @@ def main():
 #TODO class Tree
 # I just need a tip, don't make the code
 if __name__ == '__main__':
-	main()
+	test()
 	
 	

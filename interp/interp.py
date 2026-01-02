@@ -1,10 +1,12 @@
 #Dice Interpreter .dr
 import sys
-from dataStruct import Stack
+from dataStruct import Stack, MutableView as View
 from dice import Die,FairDie
 from typing import Any, Literal
 from colorama import Fore,init
 from pathlib import Path
+import math
+
 init(True)
 #from dataStruct import Stack
 def is_number(s):
@@ -16,9 +18,16 @@ def is_number(s):
 def is_bool(s):
 		return s in ['True','False']
 			
-'''
-I have no idea if this is good code
-'''
+class DrModule:
+	def __init__(self,name:str,vals:dict[str,Any|Ev.t_func]={}):
+		self.name = name
+		self.vals = vals
+	def __getitem__(self,index:str):
+		return self.vals[index]
+	def __setitem__(self,index:str,value:Ev.t_func|Any):
+		self.vals[index] = value
+	def __contains__(self,index:str):
+		return index in self.vals
 class Ev:
 	keywords = ['vars','funcs','stack','push','pop', 'True', 'False', 'read', 'err', '.func','.endfunc','call','.if','.endif','.else','del','import']
 	operators = ['!','+','-','*','/','**','&&','||','==','!=','=','#','"','--','>','<','>=','<=','T=','//','?']
@@ -30,8 +39,8 @@ class Ev:
 	t_funcs = dict[str,t_func]
 	
 	
-	@staticmethod
-	def is_valid_var(name:str)->bool:
+	
+	def is_valid_var(self,name:str)->bool:
 		if not isinstance(name,str):
 			return False
 		if name in Ev.keywords:
@@ -41,47 +50,74 @@ class Ev:
 		for c in name:
 			if c in Ev.operators:
 				return False
+		if name in self.funcs.keys(): 
+			return False
 		return True
 	def err(self,error_type:str='ERROR',message:str='',at:int|None=None,func:tuple[str,int]|None=None):
 		self.quit = True
 		if func:
 			print(Fore.RED+f'At {func[1]}:')
 		print(Fore.RED + f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}{f' in function {func[0]}' if func is not None else ''}')
-	def __init__(self,varrs:t_vars={},funcs:t_funcs={}):
+	def __init__(self,varrs:t_vars={}):
 		
 		self.force_quit:bool = False
 		self.quit:bool = False
-		self.vars:Ev.t_vars = varrs
-		self.funcs:Ev.t_funcs = funcs
+		self.vars:dict[str,Ev.t_func|DrModule|Any] = varrs
 		self.str_next = False
 		self.comment = False
-		self.import_dr('stdlib',True)
-	def import_dr(self,imported:str,baselib:bool=False):
-		p = Path.cwd() if not baselib else Path(__file__).parent
-		p /= imported
+		
+	@property
+	def funcs(self):
+		return View(tuple,self.vars)
+
+	@property
+	def modules(self):
+		return View(DrModule,self.vars)
+
+
+	def import_dr(self,imported:str):
+		path_local = Path.cwd() / imported
+		path_std = Path(__file__).parent / 'stdlib' / imported
+		p = path_local  if path_local.exists() else path_std
 		p = p.with_suffix('.dr') 
+		if not p.exists():
+			self.err('IMPORT_ERROR',f'Can\'t find path to {imported}')
+			return
 		with open(p) as f:
-			self.ev(f.read())
-	def call_func(self, name:str, arg_vals:list[Any], line:int=-1,func:tuple[str,int]|None=None):
+			e = Ev()
+			e.ev(f.read())
+		self.modules[imported] = e.as_module(imported)
+	def as_module(self,name:str) -> DrModule:
+		return DrModule(name, self.vars)
+	def call_func(self, name:str|tuple[str,list[str],list[str]], arg_vals:list[Any], line:int=-1,func:tuple[str,int]|None=None):
 		"""Execute a defined function by name with provided argument values.
 		Returns the function's return value (last value on the local stack) or None.
 		Sets evaluator error state on failure.
 		"""
-		f = (name,line) # name, called
-		if name not in self.funcs:
-			self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line,func)
-			return None
-		arg_names, body = self.funcs[name]
-		if len(arg_vals) < len(arg_names):
-			self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line,func)
-			return None
-		if len(arg_vals) > len(arg_names):
-			self.err('ARGUMENT_ERROR',f'Too many arguments for function {repr(name)}',line,func)
-			return None
+		if isinstance(name,str):
+			f = (name,line) # name, called
+			
+			if name not in self.funcs:
+				self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line,func)
+				return None
+			arg_names, body = self.funcs[name]
+			if len(arg_vals) < len(arg_names):
+				self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line,func)
+				return None
+			if len(arg_vals) > len(arg_names):
+				self.err('ARGUMENT_ERROR',f'Too many arguments for function {repr(name)}',line,func)
+				return None
+		elif isinstance(name,tuple):
+			funccc = name
+			name = funccc[0]
+			f = (name,line)
+
+			_, arg_names, body = funccc
+
 		loc = dict(zip(arg_names, arg_vals))
 		local_stack = Stack()
 		# run in a child evaluator that shares globals (vars and funcs)
-		child = Ev(varrs=self.vars.copy() if isinstance(self.vars,dict) else {}, funcs=self.funcs)
+		child = Ev(varrs=self.vars.copy() if isinstance(self.vars,dict) else {})
 		# execute the function body using the child's ev so multi-line
 		# constructs like .if and nested .func work inside functions
 		child.ev('\n'.join(body), local_vars=loc, in_ev_stack=local_stack,func=f)
@@ -126,7 +162,7 @@ class Ev:
 						break
 					body.append(l)
 					i += 1
-				self.funcs[name] = (args, body)
+				self.funcs[name] = (name, args, body)
 				# skip the .endfunc line
 				i += 1
 				continue
@@ -231,8 +267,8 @@ class Ev:
 			elif tok[0] == 'd' and tok[1:].isdigit(): ev_stack.push(FairDie(tok))
 			elif tok[:-1].replace('.','').isdecimal() and tok[-1].lower() == 'f':
 				ev_stack.push(float(tok[:-1]))
-			elif is_number(tok):
-				ev_stack.push(int(tok))
+			elif is_number(tok): # Checks if tok is number
+				ev_stack.push(int(tok)) # Turns into integer
 			
 			elif tok in ['True','False']: ev_stack.push(True if tok == 'True' else False)
 			elif local_vars and tok in local_vars:
@@ -244,6 +280,25 @@ class Ev:
 				ev_stack.push((- a) if isinstance(a,float|int) and not isinstance(a,bool) else not a )
 			elif tok == 'stack':
 				ev_stack.push(Stack())
+			elif tok == '::':
+				
+				if len(ev_stack) < 2:
+					self.err('ARGUMENT_ERROR','Not enough arguments for ::',line,func)
+					break
+					
+				attr = str(ev_stack.pop()) # Attr
+				mod_name = str(ev_stack.pop()) #DrModule
+				
+				if mod_name in self.modules:
+					if attr in self.modules[mod_name]:
+						val = self.modules[mod_name][attr]
+					else:
+						self.err('MODULE_ERROR',f'Can\'t find value {repr(attr)} in module {repr(mod_name)}',line,func)
+						break
+				else:
+					self.err('MODULE_ERROR',f'Can\'t find module {repr(mod_name)}',line,func)
+					break
+				ev_stack.push((attr,*val))
 			elif tok == 'push':
 				if len(ev_stack) < 2:
 					self.err('ARGUMENT_ERROR',f'Not enough arguments for {tok}')
@@ -251,7 +306,7 @@ class Ev:
 				a = ev_stack.pop() #value
 				s = ev_stack.pop() #stack
 				if not isinstance(s,Stack):
-					self.err('TYPE_ERROR',f'push expects arguments <Stack> <Any>, not <{type(s).__name__}> <Any>',line)
+					self.err('TYPE_ERROR',f'push expects first argument to be Stack , not {type(s).__name__}',line)
 					break
 				s:Stack
 				s.push(a)
@@ -260,7 +315,7 @@ class Ev:
 			elif tok == 'pop':
 				s = ev_stack.pop()
 				if not isinstance(s,Stack):
-					self.err('TYPE_ERROR',f'push expects arguments <Stack> <Any>, not <{type(s).__name__}> <Any>',line,func)
+					self.err('TYPE_ERROR',f'pop expects first argument to be Stack, not {type(s).__name__}',line,func)
 					break
 				if len(s) <= 0:
 					self.err("STACK_ERROR","pop from empty stack",line,func)
@@ -272,15 +327,21 @@ class Ev:
 				if len(ev_stack) < 1:
 					self.err('FUNCTION_CALL_ERROR','No function name on stack',line,func)
 					break
-				name = str(ev_stack.pop())
+				name = (ev_stack.pop())
+				if isinstance(name,str):
+					if name not in self.funcs:
+						self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line,func)
+						break
+					arg_names = self.funcs[name][0]
+					if len(ev_stack) < len(arg_names):
+						self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line,func)
+						break
+				elif isinstance(name,tuple): #OUT Funcs (name,args,body)
 
-				if name not in self.funcs:
-					self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line,func)
-					break
-				arg_names = self.funcs[name][0]
-				if len(ev_stack) < len(arg_names):
-					self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line,func)
-					break
+					arg_names = name[1]
+					if len(ev_stack) < len(arg_names):
+						self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name[0])}',line,func)
+						break
 				arg_vals = [ev_stack.pop() for _ in range(len(arg_names))]
 				arg_vals.reverse()
 				res = self.call_func(name, arg_vals, line=line,func=func)
@@ -353,7 +414,7 @@ class Ev:
 				a = ev_stack.pop() # Name
 				b = ev_stack.pop() # Value
 					
-				if not Ev.is_valid_var(a):
+				if not self.is_valid_var(a):
 					self.err('VARIABLE_DEFINITION_ERROR',f'Invalid variable name: {repr(a)}',line,func)
 					break
 				self.vars[a] = b
@@ -376,7 +437,8 @@ class Ev:
 		if ('#' in toks or 'vars' in toks or 'funcs' in toks) and not self.comment:
 			print('',end='\n')
 		return ev_stack
-	
+
+
 
 def help(command:Literal[None,'--help']=None):
 	match command:

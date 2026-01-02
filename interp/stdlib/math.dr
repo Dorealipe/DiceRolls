@@ -1,0 +1,11 @@
+
+.func sqrt num
+num 0.5f **
+.endfunc
+
+.func root num rad
+num 1 rad / **
+.endfunc
+
+2.71828182845904509079559829842765f e =
+3.14159265358979311599796346854419f pi =

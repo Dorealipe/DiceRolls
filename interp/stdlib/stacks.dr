@@ -1,0 +1,21 @@
+? stacks.dr
+.func peekStack stackType
+stackType pop n =
+stackType n push
+n
+.endfunc
+
+
+.func reverseStack stackType
+
+.func _rS s s2
+s2 s pop push
+.if s
+s s2 _rS call
+.endif
+s2
+.endfunc
+
+.endfunc
+
+.if isMain!
