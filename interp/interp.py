@@ -31,9 +31,9 @@ class DrFunction:
 	def __repr__(self):
 		return f'.func {self.name}'
 class DrModule:
-	def __init__(self,name:str,vals:dict[str,Any|DrFunction]={}):
+	def __init__(self,name:str,vals:dict[str,Any|DrFunction]):
 		self.name = name
-		self.vals = vals
+		self.vals = vals 
 	def __getitem__(self,index:str):
 		return self.vals[index]
 	def __setitem__(self,index:str,value:DrFunction|Any):
@@ -74,11 +74,11 @@ class Ev:
 		if func:
 			print(Fore.RED+f'At {func[1]}:')
 		print(Fore.RED + f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}{f' in function {func[0]}' if func is not None else ''}')
-	def __init__(self,varrs:t_vars={}):
+	def __init__(self,varrs:t_vars=None):
 		
 		self.force_quit:bool = False
 		self.quit:bool = False
-		self.vars:dict[str,DrFunction|DrModule|Any] = varrs
+		self.vars:dict[str,DrFunction|DrModule|Any] = varrs if varrs is not None else {}
 		self.str_next = False
 		self.comment = False
 		
@@ -335,6 +335,9 @@ class Ev:
 				function1:DrFunction
 
 				name, arg_names, body = function1
+				if len(arg_names) > len(ev_stack):
+					self.err('FUNCTION_CALL_ERROR',f'Not enough arguments for {name}')
+					break
 				arg_vals = [ev_stack.pop() for _ in range(len(arg_names))]
 				arg_vals.reverse()
 				res = self.call_func(function1, arg_vals, line=line,func_in=func)
@@ -482,6 +485,7 @@ def test(interpreted:str,evaluator:Ev=Ev()):
 	:type interpreted: str
 	'''
 	evaluator.ev(interpreted)
+	evaluator.log([f'{k}: {v}' for k,v in evaluator.vars.items()])
 if __name__ == "__main__":
 	
 	e = Ev()

@@ -1,0 +1,10 @@
+math import
+vars
+
+sqrt #
+16 math " sqrt :: call #
+90 math degToRad :: * # math pi :: 2 / # == #
+math sqrt :: #
+
+
+HAS # RAN #
