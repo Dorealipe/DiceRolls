@@ -1,2 +1,2 @@
 @echo off
-py "%~dp0interp.py" %*
+py "%~dp0drInterpreter.py" %*

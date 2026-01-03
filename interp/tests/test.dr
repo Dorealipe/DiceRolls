@@ -1,10 +1,13 @@
 math import
+typing import
+
+typing Function :: Function = 
+typing getType :: getType =
 vars
 
-sqrt #
+1.5f getType call #
+
 16 math " sqrt :: call #
-90 math degToRad :: * # math pi :: 2 / # == #
 math sqrt :: #
 
-
-HAS # RAN #
+HAS-RAN log

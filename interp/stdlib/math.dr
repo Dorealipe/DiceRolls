@@ -1,4 +1,3 @@
-
 .func sqrt num
 num 0.5f **
 .endfunc

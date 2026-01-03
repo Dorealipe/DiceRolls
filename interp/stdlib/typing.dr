@@ -1,6 +1,7 @@
 math import
 .func Function 
 .endfunc
+
 .func getType t
 type type =
 .if t 0 T=
@@ -28,3 +29,8 @@ type type =
 .endif
 type
 .endfunc
+
+.func randomBool
+d2 ! 2 ==
+.endfunc
+

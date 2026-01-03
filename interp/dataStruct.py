@@ -128,7 +128,7 @@ class Queue(Generic[_T]):
 		return q
 	def __len__(self):
 		return self.__size		
-class MutableView(MutableMapping):
+class TypedView(MutableMapping):
 	def __init__(self,view_type:type,storage:dict):	
 		self.view_type = view_type
 		self.storage = storage

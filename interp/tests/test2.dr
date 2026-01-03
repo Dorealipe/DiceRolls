@@ -1,0 +1,6 @@
+
+.func rand
+d10000 ! 10000 /
+.endfunc
+rand call #
+test import
