@@ -74,13 +74,12 @@ class Ev:
 		if func:
 			print(Fore.RED+f'At {func[1]}:')
 		print(Fore.RED + f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}{f' in function {func[0]}' if func is not None else ''}')
-	def __init__(self,varrs:t_vars=None):
-		
-		self.force_quit:bool = False
-		self.quit:bool = False
-		self.vars:dict[str,DrFunction|DrModule|Any] = varrs if varrs is not None else {}
-		self.str_next = False
-		self.comment = False
+	def __init__(self,varrs:t_vars|None=None):
+		self.force_quit:bool = False # for the quit command
+		self.quit:bool = False # for errors
+		self.vars:dict[str,DrFunction|DrModule|Any] = varrs if varrs is not None else {} # Includes modules and function
+		self.str_next = False # for " operator
+		self.comment = False # // For multiline comments //
 		
 	@property
 	def funcs(self):
@@ -108,7 +107,7 @@ class Ev:
 		return DrModule(name, self.vars)
 	
 	def call_func(self, func:DrFunction, arg_vals:list[Any], line:int=-1,func_in:tuple[str,int]|None=None):
-		"""Execute a defined function by name with provided argument values.
+		"""Execute a received function with provided argument values.
 		Returns the function's return value (last value on the local stack) or None.
 		Sets evaluator error state on failure.
 		"""
