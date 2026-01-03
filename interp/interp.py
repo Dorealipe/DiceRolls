@@ -5,7 +5,6 @@ from dice import Die,FairDie
 from typing import Any, Literal
 from colorama import Fore,init
 from pathlib import Path
-import math
 
 init(True)
 #from dataStruct import Stack
@@ -18,25 +17,42 @@ def is_number(s):
 def is_bool(s):
 		return s in ['True','False']
 			
+class DrFunction:
+	def __init__(self,name:str,args:list[str],body:list[str]):
+		self.name:str = name
+		self.args:list[str] = args
+		self.body:list[str] = body
+	def __str__(self):
+		return f'.func {self.name} {self.args}'
+	def __iter__(self):
+		yield self.name
+		yield self.args
+		yield self.body
+	def __repr__(self):
+		return f'.func {self.name}'
 class DrModule:
-	def __init__(self,name:str,vals:dict[str,Any|Ev.t_func]={}):
+	def __init__(self,name:str,vals:dict[str,Any|DrFunction]={}):
 		self.name = name
 		self.vals = vals
 	def __getitem__(self,index:str):
 		return self.vals[index]
-	def __setitem__(self,index:str,value:Ev.t_func|Any):
+	def __setitem__(self,index:str,value:DrFunction|Any):
 		self.vals[index] = value
 	def __contains__(self,index:str):
-		return index in self.vals
+		return (index in self.vals) if not isinstance(index,(list,tuple)) else False
+	def __str__(self):
+		return f'ModuleObject{repr(self)} '
+	def __repr__(self):
+		return f'{ {self.name}}'
 class Ev:
 	keywords = ['vars','funcs','stack','push','pop', 'True', 'False', 'read', 'err', '.func','.endfunc','call','.if','.endif','.else','del','import']
-	operators = ['!','+','-','*','/','**','&&','||','==','!=','=','#','"','--','>','<','>=','<=','T=','//','?']
+	operators = ['!','+','-','*','/','**','&&','||','==','!=','=','#','"','--','>','<','>=','<=','T=','//','?','::']
 	simple_ops = ['+','-','*','/','**','&&','||','==','!=','>','<','>=','<=','T='] # 2 inputs 1 operation
 	
 	t_stack = Stack[Any]
-	t_func = tuple[list[str],list[str]] # (['arg1','arg2'],['arg1 arg2 +'])
+	
 	t_vars = dict[str,Any]
-	t_funcs = dict[str,t_func]
+	t_funcs = dict[str,DrFunction]
 	
 	
 	
@@ -62,13 +78,13 @@ class Ev:
 		
 		self.force_quit:bool = False
 		self.quit:bool = False
-		self.vars:dict[str,Ev.t_func|DrModule|Any] = varrs
+		self.vars:dict[str,DrFunction|DrModule|Any] = varrs
 		self.str_next = False
 		self.comment = False
 		
 	@property
 	def funcs(self):
-		return View(tuple,self.vars)
+		return View(DrFunction,self.vars)
 
 	@property
 	def modules(self):
@@ -83,36 +99,21 @@ class Ev:
 		if not p.exists():
 			self.err('IMPORT_ERROR',f'Can\'t find path to {imported}')
 			return
+		
 		with open(p) as f:
 			e = Ev()
 			e.ev(f.read())
-		self.modules[imported] = e.as_module(imported)
+		self.modules[imported] = module = e.as_module(imported)
 	def as_module(self,name:str) -> DrModule:
 		return DrModule(name, self.vars)
-	def call_func(self, name:str|tuple[str,list[str],list[str]], arg_vals:list[Any], line:int=-1,func:tuple[str,int]|None=None):
+	
+	def call_func(self, func:DrFunction, arg_vals:list[Any], line:int=-1,func_in:tuple[str,int]|None=None):
 		"""Execute a defined function by name with provided argument values.
 		Returns the function's return value (last value on the local stack) or None.
 		Sets evaluator error state on failure.
 		"""
-		if isinstance(name,str):
-			f = (name,line) # name, called
-			
-			if name not in self.funcs:
-				self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line,func)
-				return None
-			arg_names, body = self.funcs[name]
-			if len(arg_vals) < len(arg_names):
-				self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line,func)
-				return None
-			if len(arg_vals) > len(arg_names):
-				self.err('ARGUMENT_ERROR',f'Too many arguments for function {repr(name)}',line,func)
-				return None
-		elif isinstance(name,tuple):
-			funccc = name
-			name = funccc[0]
-			f = (name,line)
-
-			_, arg_names, body = funccc
+		name,arg_names,body = func
+		f = name, line
 
 		loc = dict(zip(arg_names, arg_vals))
 		local_stack = Stack()
@@ -125,7 +126,7 @@ class Ev:
 			self.quit = child.quit
 			return None
 		return local_stack.pop() if local_stack else None
-	def log(self,*args:Any,sep:str=', '):
+	def log(self,*args:Any,sep:str=', '): # Debug ONLY
 		sargs = [str(i) for i in args]
 		print(Fore.GREEN+sep.join(sargs))
 	def ev(self, s:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None,func:tuple[str,int]|None=None):
@@ -162,7 +163,7 @@ class Ev:
 						break
 					body.append(l)
 					i += 1
-				self.funcs[name] = (name, args, body)
+				self.funcs[name] = DrFunction(name, args, body)
 				# skip the .endfunc line
 				i += 1
 				continue
@@ -286,19 +287,19 @@ class Ev:
 					self.err('ARGUMENT_ERROR','Not enough arguments for ::',line,func)
 					break
 					
-				attr = str(ev_stack.pop()) # Attr
-				mod_name = str(ev_stack.pop()) #DrModule
+				attr = (ev_stack.pop()) # Attr
+				mod = (ev_stack.pop()) #DrModule
 				
-				if mod_name in self.modules:
-					if attr in self.modules[mod_name]:
-						val = self.modules[mod_name][attr]
+				if isinstance(mod,DrModule):
+					if attr in mod:
+						val = mod[attr]
 					else:
-						self.err('MODULE_ERROR',f'Can\'t find value {repr(attr)} in module {repr(mod_name)}',line,func)
+						self.err('MODULE_ERROR',f'Can\'t find value {repr(attr)} in module {repr(mod)}',line,func)
 						break
 				else:
-					self.err('MODULE_ERROR',f'Can\'t find module {repr(mod_name)}',line,func)
+					self.err('MODULE_ERROR',f'{repr(mod)} isn\'t a module',line,func)
 					break
-				ev_stack.push((attr,*val))
+				ev_stack.push(val)
 			elif tok == 'push':
 				if len(ev_stack) < 2:
 					self.err('ARGUMENT_ERROR',f'Not enough arguments for {tok}')
@@ -325,26 +326,18 @@ class Ev:
 				
 			elif tok == 'call':
 				if len(ev_stack) < 1:
-					self.err('FUNCTION_CALL_ERROR','No function name on stack',line,func)
+					self.err('FUNCTION_CALL_ERROR','No function on stack',line,func)
 					break
-				name = (ev_stack.pop())
-				if isinstance(name,str):
-					if name not in self.funcs:
-						self.err('FUNCTION_CALL_ERROR',f'unknown function {repr(name)}',line,func)
-						break
-					arg_names = self.funcs[name][0]
-					if len(ev_stack) < len(arg_names):
-						self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name)}',line,func)
-						break
-				elif isinstance(name,tuple): #OUT Funcs (name,args,body)
+				function1 = (ev_stack.pop())
+				if not isinstance(function1,DrFunction):
+					self.err('FUNCTION_CALL_ERROR','call last argument must be function')
+					break
+				function1:DrFunction
 
-					arg_names = name[1]
-					if len(ev_stack) < len(arg_names):
-						self.err('ARGUMENT_ERROR',f'Too few arguments for function {repr(name[0])}',line,func)
-						break
+				name, arg_names, body = function1
 				arg_vals = [ev_stack.pop() for _ in range(len(arg_names))]
 				arg_vals.reverse()
-				res = self.call_func(name, arg_vals, line=line,func=func)
+				res = self.call_func(function1, arg_vals, line=line,func_in=func)
 				if self.quit:
 					break
 				if res is not None:
