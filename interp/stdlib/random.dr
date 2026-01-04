@@ -1,0 +1,23 @@
+stacks import
+stacks range :: " range =
+" stacks del
+
+
+.func randint min max
+min max diceRange call !
+.endfunc
+
+.func diceRange min max
+min max range call dice
+.endfunc
+.func randfloat
+d100000 ! 100000 /
+.endfunc
+
+.func randbool
+d2 ! 2 ==
+.endfunc
+
+.if FILENAME MAIN ==
+read read randint call #
+.endif

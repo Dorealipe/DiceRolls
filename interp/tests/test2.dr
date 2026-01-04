@@ -1,0 +1,8 @@
+random import
+random randfloat rand =
+
+
+.if FILENAME MAIN ==
+
+rand call #
+.endif
