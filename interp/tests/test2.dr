@@ -1,6 +1,8 @@
+random import
+random randfloat rand =
 
-.func rand
-d10000 ! 10000 /
-.endfunc
+
+.if FILENAME MAIN ==
+
 rand call #
-test import
+.endif

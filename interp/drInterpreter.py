@@ -25,7 +25,9 @@ class DrFunction:
 		self.args:list[str] = args
 		self.body:list[str] = body
 	def __str__(self):
-		return f'.func {self.name}'
+		s = ''
+		for i in self.args: s = ' '.join([s,i])
+		return f'.func {self.name}{s}'
 	def __iter__(self):
 		yield self.name
 		yield self.args
@@ -47,7 +49,7 @@ class DrModule:
 	def __repr__(self):
 		return f'{ {self.name}}'
 class Ev:
-	keywords = ['vars','funcs','stack','push','pop', 'True', 'False', 'read', 'err', '.func','.endfunc','call','.if','.endif','.else','del','import']
+	keywords = ['vars','funcs','stack','push','pop', 'True', 'False', 'read', 'err', '.func','.endfunc','call','.if','.endif','.else','del','import','log','dice']
 	operators = ['!','+','-','*','/','**','&&','||','==','!=','=','#','"','--','>','<','>=','<=','T=','//','?','::']
 	simple_ops = ['+','-','*','/','**','&&','||','==','!=','>','<','>=','<=','T='] # 2 inputs 1 operation
 	
@@ -68,20 +70,19 @@ class Ev:
 		for c in name:
 			if c in Ev.operators:
 				return False
-		if name in self.funcs.keys(): 
-			return False
 		return True
 	def err(self,error_type:str='ERROR',message:str='',at:int|None=None,func:tuple[str,int]|None=None):
 		self.quit = True
 		if func:
-			print(Fore.RED+f'At {func[1]}:')
+			print(Fore.RED+f'At {func[1]} in {self.name}:')
 		print(Fore.RED + f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}{f' in function {func[0]}' if func is not None else ''}')
-	def __init__(self,filename,varrs:t_vars|None=None):
-		self.name = filename
+	def __init__(self,filename:str,varrs:t_vars|None=None,is_main:bool=False):
+		self.filename = filename
+		self.name = 'MAIN' if is_main else filename
 		self.force_quit:bool = False # for the quit command
 		self.quit:bool = False # for errors
 		self.vars:dict[str,DrFunction|DrModule|Any] = varrs if varrs is not None else {} # Includes modules and function
-		self.vars['FILENAME'] = self.name
+		self.vars |= {'FILENAME':self.name,'MAIN':'MAIN'}
 		self.str_next = False # for " operator
 		self.comment = False # // For multiline comments //
 		
@@ -116,8 +117,8 @@ class Ev:
 		
 		with open(p,'r+') as f: # f turns empty after f.read() :(
 			text = f.read()
-			e = Ev(imported)
-			if f'{self.name} import' in text:
+			e = Ev(imported,None,False)
+			if f'{self.filename} import' in text:
 				self.err('IMPORT_ERROR','Circular import',line,func)
 				return
 			e.ev(text)
@@ -183,13 +184,19 @@ class Ev:
 				body = []
 				i += 1
 				# collect until .endfunc
+				level = 0
 				while True:
 					if i >= len(lines):
 						self.err('FUNCTION_DEFINITION_ERROR', f'unterminated function definition for {name}')
 						return
 					l = lines[i].rstrip()
+					if l.strip().startswith('.func'):
+						level += 1
 					if l.strip().startswith('.endfunc'):
-						break
+						if level <= 0:
+							break
+						else:
+							level -= 1
 					body.append(l)
 					i += 1
 				self.funcs[name] = DrFunction(name, args, body)
@@ -292,9 +299,19 @@ class Ev:
 				continue
 			if tok == 'err':
 				a = ev_stack.pop()
-				self.err(str(a),line,func)
+				self.err(str(a),'',line,func)
 				break
 			elif tok[0] == 'd' and tok[1:].isdigit(): ev_stack.push(FairDie(tok))
+			elif tok == 'dice':
+				# stack dice -> Die(list(stack))
+				if not len(ev_stack):
+					self.err('ARGUMENT_ERROR',f'Not enough arguments for {repr(tok)}',line,func)
+					break
+				s = ev_stack.pop()
+				if not isinstance(s, Stack):
+					self.err('TYPE_ERROR',f'{repr(tok)} expects Stack, not {type(s).__name__}')
+				ev_stack.push(Die(list(s))) 
+
 			elif tok[:-1].replace('.','').isdecimal() and tok[-1].lower() == 'f':
 				ev_stack.push(float(tok[:-1]))
 			elif is_number(tok): # Checks if tok is number
@@ -310,25 +327,6 @@ class Ev:
 				ev_stack.push((- a) if isinstance(a,float|int) and not isinstance(a,bool) else not a )
 			elif tok == 'stack':
 				ev_stack.push(Stack())
-			elif tok == '::':
-				
-				if len(ev_stack) < 2:
-					self.err('ARGUMENT_ERROR','Not enough arguments for ::',line,func)
-					break
-					
-				attr = (ev_stack.pop()) # Attr
-				mod = (ev_stack.pop()) #DrModule
-				
-				if isinstance(mod,DrModule):
-					if attr in mod:
-						val = mod[attr]
-					else:
-						self.err('MODULE_ERROR',f'Can\'t find value {repr(attr)} in module {repr(mod)}',line,func)
-						break
-				else:
-					self.err('MODULE_ERROR',f'{repr(mod)} isn\'t a module',line,func)
-					break
-				ev_stack.push(val)
 			elif tok == 'push':
 				if len(ev_stack) < 2:
 					self.err('ARGUMENT_ERROR',f'Not enough arguments for {tok}')
@@ -359,7 +357,7 @@ class Ev:
 					break
 				function1 = (ev_stack.pop())
 				if not isinstance(function1,DrFunction):
-					self.err('FUNCTION_CALL_ERROR','call last argument must be function')
+					self.err('FUNCTION_CALL_ERROR','call last argument must be function',line,func)
 					break
 				function1:DrFunction
 
@@ -432,6 +430,25 @@ class Ev:
 					self.err('LOG_ERROR','Nothing to log',line,func)
 					break
 				self.log(str(ev_stack.peek()))
+			elif tok == '::':
+				
+				if len(ev_stack) < 2:
+					self.err('ARGUMENT_ERROR','Not enough arguments for ::',line,func)
+					break
+					
+				attr = (ev_stack.pop()) # Attr
+				mod = (ev_stack.pop()) #DrModule
+				
+				if isinstance(mod,DrModule):
+					if attr in mod:
+						val = mod[attr]
+					else:
+						self.err('MODULE_ERROR',f'Can\'t find value {repr(attr)} in module {repr(mod)}',line,func)
+						break
+				else:
+					self.err('MODULE_ERROR',f'{repr(mod)} isn\'t a module',line,func)
+					break
+				ev_stack.push(val)
 			elif tok == 'import':
 				if len(ev_stack) == 0:
 					self.err('IMPORT_ERROR','Expected expression',line,func)
@@ -490,16 +507,18 @@ def console(evaluator:Ev):
 		evaluator.ev_expr(command)
 		# TODO Check signals
 
-def main(evaluator:Ev=Ev('drMain')):
+def main(evaluator:Ev=None):
+	evaluator = Ev('...',is_main=True) if evaluator is None else evaluator
 	if len(sys.argv) == 1: # only dr
 		console(evaluator)
 		
 
-	if len(sys.argv) >= 2:
+	elif len(sys.argv) >= 2:
 		if sys.argv[1][0:2] != '--':	
 			pathh = (Path.cwd() / sys.argv[-1]).with_suffix('.dr')
 			if pathh.exists():
-				with open(pathh) as interpreted:#argv[0] is dr
+				with open(pathh) as interpreted: #argv[0] is dr
+					evaluator.filename = sys.argv[-1]
 					evaluator.ev(interpreted.read())
 			else:
 				evaluator.err('FILE_NOT_FOUND_ERROR',f'Can\'t find file \'{sys.argv[-1]}\' in path')
@@ -530,6 +549,4 @@ def test(interpreted:str,evaluator:Ev):
 	evaluator.ev(interpreted)
 	evaluator.log([f'{k}: {v}' for k,v in evaluator.vars.items()])
 if __name__ == "__main__":
-	
-	
 	main()

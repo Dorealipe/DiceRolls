@@ -30,7 +30,18 @@ type type =
 type
 .endfunc
 
-.func randomBool
-d2 ! 2 ==
-.endfunc
 
+
+.func isSameStack stack1 stack2
+.if stack1 stack2 T= stack1 stack T= &&
+True " v3 =
+stack1 stack2 == " v1 =
+stack1 testt push
+stack1 stack2 == " v2 =
+stack1 pop
+.else
+	TYPE_ERROR err
+	False " v3 =
+.endif
+v1 v2 && v3 &&
+.endfunc
