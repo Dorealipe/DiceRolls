@@ -4,10 +4,14 @@ stacks range :: " range =
 
 
 .func randint min max
-min max diceRange call !
+min max rangeDice call !
 .endfunc
 
-.func diceRange min max
+.func stackDice stackType
+stackType dice
+.endfunc
+
+.func rangeDice min max
 min max range call dice
 .endfunc
 .func randfloat

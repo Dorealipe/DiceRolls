@@ -5,7 +5,12 @@ class Die:
     def play(self):
        return Die.random.choice(self.sides)
     def __repr__(self):
-        return f'd{min(self.sides)}~{max(self.sides)}'
+        for a in self.sides:
+            if not getattr(a,'__gt__',False):
+                fail = True
+        else:
+            fail = True
+        return f'd{min(self.sides)}~{max(self.sides)}' if not fail else f'd{self.sides}'
 class FairDie(Die):
     def __init__(self,quant_sides:int|str):
         if isinstance(quant_sides,int):
