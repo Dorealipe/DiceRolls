@@ -1,23 +1,25 @@
 #Dice Interpreter .dr
 import sys
+from time import sleep,time
 from dataStruct import Stack, TypedView as View
 from dice import Die,FairDie
 from typing import Any, Literal, Protocol, TypeVar
 from colorama import Fore,init
 from pathlib import Path
+def time_function(func):
+	def f(*args,**kwargs):
+		start = time()
+		r = func(*args,**kwargs)
+		end = time()
+		print((end-start).total_seconds(),'seconds')
+		return r
+	return f
 init(True)
+
 _T_contra = TypeVar("_T_contra", contravariant=True)
 class SupportsWrite(Protocol[_T_contra]):
 	def write(self, s: _T_contra) -> object: ...
 
-def is_number(s):
-		try:
-			float(s)
-			return True
-		except ValueError:
-			return False
-def is_bool(s):
-		return s in ['True','False']
 			
 class DrFunction:
 	def __init__(self,name:str,args:list[str],body:list[str]):
@@ -25,15 +27,15 @@ class DrFunction:
 		self.args:list[str] = args
 		self.body:list[str] = body
 	def __str__(self):
-		s = ''
-		for i in self.args: s = ' '.join([s,i])
-		return f'.func {self.name}{s}'
+		return f'{repr(self)} {len(self.body)}'
 	def __iter__(self):
 		yield self.name
 		yield self.args
 		yield self.body
 	def __repr__(self):
-		return f'.func {self.name}'
+		s = ''
+		for i in self.args: s = ' '.join([s,i])
+		return f'.func {self.name}{s}'
 class DrModule:
 	def __init__(self,name:str,vals:dict[str,Any|DrFunction]):
 		self.name = name
@@ -45,11 +47,11 @@ class DrModule:
 	def __contains__(self,index:str):
 		return (index in self.vals) if not isinstance(index,(list,tuple)) else False
 	def __str__(self):
-		return f'ModuleObject{repr(self)}{self.vals} '
+		return f'ModuleObject{ {repr(self)}}{self.vals} '
 	def __repr__(self):
-		return f'{ {self.name}}'
+		return f'{self.name} import'
 class Ev:
-	keywords = ['vars','funcs','stack','push','pop', 'True', 'False', 'read', 'err', '.func','.endfunc','call','.if','.endif','.else','del','import','log','dice']
+	keywords = ['vars','funcs','stack','push','pop', 'True', 'False', 'read', 'err', '.func','.endfunc','call','.if','.endif','.else','del','quit','import','log','dice']
 	operators = ['!','+','-','*','/','**','&&','||','==','!=','=','#','"','--','>','<','>=','<=','T=','//','?','::']
 	simple_ops = ['+','-','*','/','**','&&','||','==','!=','>','<','>=','<=','T='] # 2 inputs 1 operation
 	
@@ -71,11 +73,28 @@ class Ev:
 			if c in Ev.operators:
 				return False
 		return True
+	def format_output(self, value:Any) -> str:
+		"""Formats values"""
+		if isinstance(value, (bool,Die)):
+			return repr(value)
+		if isinstance(value, int):
+			# If integer has more than 10 digits, use scientific notation
+			if len(str(abs(value))) > 10:
+				return f"{value:e}"
+			return str(value)
+		
+		if isinstance(value, float):
+			# Always append 'f' to floats
+			return f"{value}f" if value <= float(1.8*10**308) else f'{value}'
+		return repr(value)
 	def err(self,error_type:str='ERROR',message:str='',at:int|None=None,func:tuple[str,int]|None=None):
 		self.quit = True
 		if func:
 			print(Fore.RED+f'At {func[1]} in {self.name}:')
 		print(Fore.RED + f'{error_type}{': ' if message != '' else ''}{message}{f' at line {at}' if at is not None and at != -1 else ''}{f' in function {func[0]}' if func is not None else ''}')
+	def maj_err(self,error_type:str='MAJOR_ERROR',message:str='',at:int|None=None,func:tuple[str,int]|None=None):
+		self.force_quit = True
+		self.err(error_type,message,at,func)
 	def __init__(self,filename:str,varrs:t_vars|None=None,is_main:bool=False):
 		self.filename = filename
 		self.name = 'MAIN' if is_main else filename
@@ -157,8 +176,9 @@ class Ev:
 		:param file: a file-like object (stream); defaults to the current sys.stdout.
 		:type file: SupportsWrite[str] | None
 		'''
-		sargs = [str(i) for i in values]
+		sargs = [repr(i) for i in values]
 		print(Fore.GREEN+sep.join(sargs),end=end,file=file)
+	@time_function
 	def ev(self, s:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None,func:tuple[str,int]|None=None):
 		
 		lines = s.split('\n')
@@ -278,7 +298,7 @@ class Ev:
 			if self.quit:
 				break
 			i += 1
-
+	
 	def ev_expr(self, expr:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None, line:int=-1,func:str|None=None):
 		'''
 		Evaluate a single expression line in the given context.
@@ -314,7 +334,7 @@ class Ev:
 
 			elif tok[:-1].replace('.','').isdecimal() and tok[-1].lower() == 'f':
 				ev_stack.push(float(tok[:-1]))
-			elif is_number(tok): # Checks if tok is number
+			elif tok.isnumeric(): # Checks if tok is number
 				ev_stack.push(int(tok)) # Turns into integer
 			
 			elif tok in ['True','False']: ev_stack.push(True if tok == 'True' else False)
@@ -391,7 +411,7 @@ class Ev:
 				comp = ['<','<=','>','>=']
 				math = ['+','-','*','/','**']
 				if (isinstance(lh,str) or isinstance(rh,str)) and tok in comp:
-					self.err('TYPE_ERROR',f'Cannot compare string with {type(lh) if isinstance(lh,str) else type(rh)}',line,func)
+					self.err('TYPE_ERROR',f'Cannot compare string with {type(lh).__name__ if isinstance(lh,str) else type(rh).__name__}',line,func)
 					break
 				if (isinstance(lh,(str,Stack,Die,bool)) or isinstance(rh,(str,Stack,Die,bool))) and (tok in math or tok in comp):
 					self.err('TYPE_ERROR',f'Cannot perform operation {tok} with {type(lh).__name__} and {type(rh).__name__}',line,func)
@@ -424,7 +444,7 @@ class Ev:
 				if len(ev_stack) == 0:
 					self.err('PRINT_ERROR','Nothing to print',line,func)
 					break
-				print(Fore.YELLOW + repr(ev_stack.peek()),end=' ')
+				print(Fore.YELLOW + self.format_output(ev_stack.peek()),end=' ')
 			elif tok == 'log':
 				if len(ev_stack) == 0:
 					self.err('LOG_ERROR','Nothing to log',line,func)
@@ -500,12 +520,19 @@ def help(command:Literal[None,'--help']=None):
 		case '--help':
 			print('Shows general help or help for a specific command.')
 
-def console(evaluator:Ev):
+def console(evaluator:Ev):	
 	print('DiceRolls interpreter running, note that it doesn\'t support dot keywords')
 	while not evaluator.force_quit:
-		command = input(Fore.LIGHTBLUE_EX+'>> '+Fore.RESET)
-		evaluator.ev_expr(command)
-		# TODO Check signals
+		try:
+			print(Fore.CYAN+'>> '+Fore.RESET,end='')
+			command = input()
+			evaluator.ev_expr(command)
+		except KeyboardInterrupt:
+			evaluator.maj_err('KEYBOARD_INTERRUPT')
+		except EOFError:
+			evaluator.maj_err('END_OF_FILE_ERROR')
+		except Exception as e:
+			evaluator.maj_err('MAJOR_CONSOLE_ERROR',f'A major error ocorred: "{e}"')
 
 def main(evaluator:Ev=None):
 	evaluator = Ev('...',is_main=True) if evaluator is None else evaluator
@@ -519,13 +546,26 @@ def main(evaluator:Ev=None):
 			if pathh.exists():
 				with open(pathh) as interpreted: #argv[0] is dr
 					evaluator.filename = sys.argv[-1]
-					evaluator.ev(interpreted.read())
+					try:
+						evaluator.ev(interpreted.read())
+					except KeyboardInterrupt:
+						evaluator.maj_err('KEYBOARD_INTERRUPT')
+					except EOFError:
+						evaluator.maj_err('END_OF_FILE_ERROR')
+					except Exception as e:
+						evaluator.maj_err('MAJOR_CONSOLE_ERROR',f'A major error ocorred: "{e}"')
 			else:
 				evaluator.err('FILE_NOT_FOUND_ERROR',f'Can\'t find file \'{sys.argv[-1]}\' in path')
 		else:
 			match sys.argv[1]:
 				case '--':
 					console(evaluator)
+				case '--vars':
+					evaluator.ev_expr('vars')
+				case '--funcs':
+					evaluator.ev_expr('funcs')
+				case '--cls':
+					print("\033[H\033[J", end="")
 				case '--help':
 					if len(sys.argv) == 3: # dr --help <command>
 						help(sys.argv[2])
