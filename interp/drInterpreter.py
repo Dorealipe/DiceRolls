@@ -1,19 +1,11 @@
 #Dice Interpreter .dr
 import sys
-from time import sleep,time
 from dataStruct import Stack, TypedView as View
 from dice import Die,FairDie
 from typing import Any, Literal, Protocol, TypeVar
 from colorama import Fore,init
 from pathlib import Path
-def time_function(func):
-	def f(*args,**kwargs):
-		start = time()
-		r = func(*args,**kwargs)
-		end = time()
-		print((end-start).total_seconds(),'seconds')
-		return r
-	return f
+
 init(True)
 
 _T_contra = TypeVar("_T_contra", contravariant=True)
@@ -178,7 +170,6 @@ class Ev:
 		'''
 		sargs = [repr(i) for i in values]
 		print(Fore.GREEN+sep.join(sargs),end=end,file=file)
-	@time_function
 	def ev(self, s:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None,func:tuple[str,int]|None=None):
 		
 		lines = s.split('\n')
@@ -193,13 +184,15 @@ class Ev:
 					
 			# function definition: .func name arg1 arg2 ...
 			if line.startswith('.func'):
+				line = line.split('?')[0] # ignore after comment
+				
 				parts = line.split()
 				if len(parts) < 2: # <= 1 
 					self.err('FUNCTION_DEFINITION_ERROR', f'malformed .func header',i+1,func)
 					return
 				# parts[0] is '.func'
 				name = parts[1]
-				args = parts[2:]
+				args = parts[2:] 
 				
 				body = []
 				i += 1
