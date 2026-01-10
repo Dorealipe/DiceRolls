@@ -1,12 +1,56 @@
-# DiceRolls Interpreter (.dr)
 
+# DiceRolls Interpreter (.dr)
 A stack-based interpreter designed for data manipulation, modular functions, and dice-based simulations.
 
-## Installation and Usage
+## Installation (Windows)
+1. The project includes a setup script to integrate the interpreter directly into your terminal.
 
-To run the interpreter, ensure you have Python 3.10+ and the required dependencies installed (colorama, pyreadline3).
+2. Run the setup.ps1 script as an Administrator.
 
-### Running the Console (#C)
-```bash
-python drInterpreter.py --
+3. The script will automatically add the `DiceRolls/interp` folder to your User PATH.
+
+4. Restart your terminal.
+
+You can now use the `dr` command from any folder.
+
+## Usage
+### Running the Console
+`dr --`
+or
+`dr`
+### Executing a Script
+`dr script.dr`
+
+## Console Commands
+- `--cls`: Clears the terminal screen.
+
+- `--vars:` Displays all variables in the current environment.
+
+- `--funcs`: Displays all defined functions.
+
+- `--help`: Shows the help menu.
+
+- `quit`: Terminates the session.
+
+## Syntax Overview
+### Stack Operations
+- `stack`: Pushes a new stack onto the main stack.
+
+- `push`: Pushes a value into a target stack.
+
+- `pop`: Removes and returns the top value of a stack.
+
+### Variables and Functions
+- `value " name =`: Assigns a value to a variable.
+
+- `.func name args ... .endfunc`: Defines a reusable function.
+
+- `args func call`: Executes a function currently on the stack.
+
+### Dice Mechanics
+- `dX`: Creates a fair die with X sides (e.g., d20).
+
+- `diceType !`: Rolls the die and returns a result, if the received value is not a dice, it will return the value itself.
+
+- `stackType dice`: Converts a stack of values into a custom Die object.
 
