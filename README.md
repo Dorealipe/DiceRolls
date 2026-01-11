@@ -21,17 +21,8 @@ or
 ### Executing a Script
 `dr script.dr`
 
-## Console Commands
-- `--cls`: Clears the terminal screen.
-
-- `--vars:` Displays all variables in the current environment.
-
-- `--funcs`: Displays all defined functions.
-
+## Commands
 - `--help`: Shows the help menu.
-
-- `quit`: Terminates the session.
-
 ## Syntax Overview
 ### Stack Operations
 - `stack`: Pushes a new stack onto the main stack.
@@ -52,5 +43,14 @@ or
 
 - `diceType !`: Rolls the die and returns a result, if the received value is not a dice, it will return the value itself.
 
+### If statements
+- `.if True`: Checks if the following expression returns True
+- `.else`: Executes if the expression was false
+### Others
+- `vars`: Prints all vars
+- `funcs`: Prints all functions
+- `cls`: Clears the console
+- `quit`: Ends the session
+- `err`: Outputs an error
 - `stackType dice`: Converts a stack of values into a custom Die object.
 
