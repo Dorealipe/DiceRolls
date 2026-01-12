@@ -43,8 +43,20 @@ class DrModule:
 	def __repr__(self):
 		return f'{self.name} import'
 class Ev:
-	keywords = ['vars','funcs','stack','push','pop', 'True', 'False', 'read', 'err', '.func','.endfunc','call','.if','.endif','.else','del','quit','import','log','dice']
-	operators = ['!','+','-','*','/','**','&&','||','==','!=','=','#','"','--','>','<','>=','<=','T=','//','?','::']
+	keywords = ['vars','funcs',
+				'stack','push','pop',
+				'True', 'False',
+				'read', 'err',
+				'.func','.endfunc','call',
+				'.if','.endif','.else',
+				'import','dice',
+				'del','quit','cls','log']
+	operators = ['!',
+				'+','-','*','/','**',
+				'&&','||','--',
+				'==','!=','>','<','>=','<=','T=',
+				'//','?',
+				'::','=','#','"',]
 	simple_ops = ['+','-','*','/','**','&&','||','==','!=','>','<','>=','<=','T='] # 2 inputs 1 operation
 	
 	t_stack = Stack[Any]
@@ -433,6 +445,7 @@ class Ev:
 					case '>=': ev_stack.push(lh >= rh)
 					# Bitwise
 					case '^': ev_stack.push(lh ^ rh) if isinstance(lh,int) and isinstance(rh,int) else self.err('TYPE_ERROR','Bitwise XOR requires integer or boolean operands',line,func)
+			
 			elif tok == '#':
 				if len(ev_stack) == 0:
 					self.err('PRINT_ERROR','Nothing to print',line,func)
@@ -467,6 +480,8 @@ class Ev:
 					self.err('IMPORT_ERROR','Expected expression',line,func)
 				file = ev_stack.pop()
 				self.import_dr(file)
+			elif tok == 'cls':
+				print("\033[H\033[J", end="",flush=True)
 			elif tok == '=':
 				if len(ev_stack) < 2:
 					self.err('VARIABLE_DEFINITION_ERROR',f'Not enough arguments for {tok}',line,func)
@@ -553,12 +568,6 @@ def main(evaluator:Ev=None):
 			match sys.argv[1]:
 				case '--':
 					console(evaluator)
-				case '--vars':
-					evaluator.ev_expr('vars')
-				case '--funcs':
-					evaluator.ev_expr('funcs')
-				case '--cls':
-					print("\033[H\033[J", end="")
 				case '--help':
 					if len(sys.argv) == 3: # dr --help <command>
 						help(sys.argv[2])
