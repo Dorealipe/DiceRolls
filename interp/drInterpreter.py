@@ -15,7 +15,9 @@ class SupportsWrite(Protocol[_T_contra]):
 			
 class DrFunction:
 	def __init__(self,name:str,args:list[str],body:list[str]):
-		self.name:str = name
+		if not (isinstance(name,str)):
+			raise ValueError(f'name should be str, not {type(name).__name__}')
+		self.name:str = name 
 		self.args:list[str] = args
 		self.body:list[str] = body
 	def __str__(self):
@@ -118,7 +120,7 @@ class Ev:
 		return View(DrModule,self.vars)
 
 
-	def import_dr(self,imported:str,line:int = None ,func:tuple[str,int] = None):
+	def import_dr(self,imported:str,line:int|None = None ,func:tuple[str,int]|None = None):
 		'''
 		Imports a dr module and gives errors if a circular import is detected
 		
@@ -153,7 +155,9 @@ class Ev:
 		Returns the function's return value (last value on the local stack) or None.
 		Sets evaluator error state on failure.
 		"""
-		name,arg_names,body = func
+		
+		name,arg_names,body = func.name,func.args,func.body
+		
 		f = name, line
 
 		loc = dict(zip(arg_names, arg_vals))
@@ -224,6 +228,7 @@ class Ev:
 							level -= 1
 					body.append(l)
 					i += 1
+				if not isinstance(name,str): raise ValueError()
 				self.funcs[name] = DrFunction(name, args, body)
 				# skip the .endfunc line
 				i += 1
@@ -304,7 +309,7 @@ class Ev:
 				break
 			i += 1
 	
-	def ev_expr(self, expr:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None, line:int=-1,func:str|None=None):
+	def ev_expr(self, expr:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None, line:int=-1,func:tuple[str,int]|None=None):
 		'''
 		Evaluate a single expression line in the given context.
 		Supports local variables and a provided stack.
@@ -384,9 +389,9 @@ class Ev:
 				if not isinstance(function1,DrFunction):
 					self.err('FUNCTION_CALL_ERROR','call last argument must be function',line,func)
 					break
-				function1:DrFunction
 
-				name, arg_names, body = function1
+
+				name, arg_names, body = function1.name,function1.args,function1.body
 				if len(arg_names) > len(ev_stack):
 					self.err('FUNCTION_CALL_ERROR',f'Not enough arguments for {name}')
 					break
@@ -520,13 +525,20 @@ class Ev:
 
 
 
-def help(command:Literal[None,'--help']=None):
+def help(ev:Ev,command:Literal[None,'--help']|Any=None):
 	match command:
 		case None:
 			print('~~DiceRolls Interpreter~~')
 			print('--help ~> Provides help for other commands.')
+		case '--':
+			print('Runs the console, receives no arguments')
 		case '--help':
 			print('Shows general help or help for a specific command.')
+			print('Syntax: ')
+			print('--help | Shows general help')
+			print('--help *<command> | Shows help for every command given')
+		case _:
+			ev.err(f'Can\'t find help for "{command}"')
 
 def console(evaluator:Ev):	
 	print('DiceRolls interpreter running, note that it doesn\'t support dot keywords')
@@ -542,8 +554,8 @@ def console(evaluator:Ev):
 		except Exception as e:
 			evaluator.maj_err('MAJOR_CONSOLE_ERROR',f'A major error ocorred: "{e}"')
 
-def main(evaluator:Ev=None):
-	evaluator = Ev('...',is_main=True) if evaluator is None else evaluator
+def main(evaluator:Ev|None=None):
+	evaluator = Ev('console',is_main=True) if evaluator is None else evaluator
 	if len(sys.argv) == 1: # only dr
 		console(evaluator)
 		
@@ -570,11 +582,12 @@ def main(evaluator:Ev=None):
 					console(evaluator)
 				case '--help':
 					if len(sys.argv) == 3: # dr --help <command>
-						help(sys.argv[2])
+						help(evaluator,sys.argv[2])
 					elif len(sys.argv) == 2: # dr --help
-						help()
-					elif len(sys.argv) > 3: 
-						evaluator.err('ARGUMENT_ERROR','Too many arguments for --help')
+						help(evaluator)
+					elif len(sys.argv) > 3: # dr --help <command> <command> ...
+						for c in sys.argv[2:]:
+							help(evaluator,c)
 	
 def test(interpreted:str,evaluator:Ev):
 	'''

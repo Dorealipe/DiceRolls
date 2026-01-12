@@ -2,3 +2,4 @@ __pycache__/
 test.py
 secret_test.dr
 test.log
+.vscode
