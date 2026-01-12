@@ -25,11 +25,11 @@ or
 - `--help`: Shows the help menu.
 ## Syntax Overview
 ### Stack Operations
-- `stack`: Pushes a new stack onto the main stack.
+- `stack`: Creates a new stack.
 
 - `push`: Pushes a value into a target stack.
 
-- `pop`: Removes and returns the top value of a stack.
+- `pop`: Pops the top value of a stack.
 
 ### Variables and Functions
 - `value " name =`: Assigns a value to a variable.
@@ -40,7 +40,7 @@ or
 
 ### Dice Mechanics
 - `dX`: Creates a fair die with X sides (e.g., d20).
-
+- `stackType dice`: Converts a stack of value into a Die object.
 - `diceType !`: Rolls the die and returns a result, if the received value is not a dice, it will return the value itself.
 
 ### If statements
@@ -51,6 +51,6 @@ or
 - `funcs`: Prints all functions
 - `cls`: Clears the console
 - `quit`: Ends the session
-- `err`: Outputs an error
-- `stackType dice`: Converts a stack of values into a custom Die object.
+- `ERROR_TYPE err`: Outputs an error
+
 
