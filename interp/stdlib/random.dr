@@ -4,24 +4,24 @@ stacks range :: " range =
 
 
 .func randint min max
-min max rangeDice call !
+    min max rangeDice call !
 .endfunc
 
 .func stackDice stackType
-stackType dice
+    stackType dice
 .endfunc
 
 .func rangeDice min max
-min max range call dice
+    min max range call dice
 .endfunc
 .func randfloat
-d100000 ! 100000 /
+    d100000 ! 100000 /
 .endfunc
 
 .func randbool
-d2 ! 2 ==
+    d2 ! 2 ==
 .endfunc
 
 .if FILENAME MAIN ==
-read read randint call #
+    read read randint call #
 .endif

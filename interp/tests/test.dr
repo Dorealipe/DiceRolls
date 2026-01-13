@@ -7,7 +7,17 @@ vars
 
 1.5f getType call #
 
-16 math " sqrt :: call #
+16 math sqrt :: call #
 math sqrt :: #
+stack 8 push "Text" push #
 
+.func closure val
+
+    .func _
+        val
+    .endfunc
+    _
+.endfunc
+
+2 closure call #
 HAS-RAN log

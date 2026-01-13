@@ -3,6 +3,5 @@ random randfloat rand =
 
 
 .if FILENAME MAIN ==
-
-rand call #
+    rand call #
 .endif

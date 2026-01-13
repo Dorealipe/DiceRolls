@@ -1,47 +1,47 @@
 math import
-.func Function 
+.func FunctionType 
 .endfunc
 
 .func getType t
-type type =
-.if t 0 T=
-" Integer type =
-.else
-	.if t 0.5f T=
-	" Float type =
+	" type type =
+	.if t 0 T=
+		" Integer type =
 	.else
-		.if t " String T=
-		" String type =
+		.if t 0.5f T=
+			" Float type =
 		.else
-			.if t stack T=
-			" Stack type =
+			.if t " String T=
+				" String type =
 			.else
-				.if t math T=
-				" Module type =
+				.if t stack T=
+					" Stack type =
 				.else
-					.if t Function T=
-					" Function type =
+					.if t math T=
+						" Module type =
+					.else
+						.if t FunctionType T=
+							" FunctionType type =
+						.endif
 					.endif
 				.endif
 			.endif
 		.endif
 	.endif
-.endif
 type
 .endfunc
 
 
 
 .func isSameStack stack1 stack2
-.if stack1 stack2 T= stack1 stack T= &&
-True " v3 =
-stack1 stack2 == " v1 =
-stack1 testt push
-stack1 stack2 == " v2 =
-stack1 pop
-.else
-	TYPE_ERROR err
-	False " v3 =
-.endif
+	.if stack1 stack2 T= stack1 stack T= &&
+		True " v3 =
+		stack1 stack2 == " v1 =
+		stack1 testt push
+		stack1 stack2 == " v2 =
+		stack1 pop
+	.else
+		TYPE_ERROR err
+		False " v3 =
+	.endif
 v1 v2 && v3 &&
 .endfunc

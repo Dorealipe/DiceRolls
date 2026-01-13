@@ -1,59 +1,59 @@
 ? stacks.dr
 .func peekStack stackType
-stackType pop n =
-stackType n push
-n
+    stackType pop n =
+    stackType n push
+    n
 .endfunc
 
 
 .func range min max
-.if min 0 T=  min max T= && --
-TYPE_ERROR err
-.endif
+    .if min 0 T=  min max T= && --
+        TYPE_ERROR err
+    .endif
 
-.func _rang stackT num min
-.if num min >
+    .func _rang stackT num min
+        .if num min >
 
-num 1 - " n =
-stackT n push
-stackT n min _rang call
+            num 1 - " n =
+            stackT n push
+            stackT n min _rang call
 
-.endif
+        .endif
 
-stackT
-.endfunc
-stack max 1 + min _rang call
+        stackT
+    .endfunc
+    stack max 1 + min _rang call
 .endfunc
 
 
 .func reverseStack stackType
 
-.func _rS s s2
-s2 s pop push
-.if s
-s s2 _rS call
-.endif
-s2
-.endfunc
-stackType copyStack call stack _rS call
+    .func _rS s s2
+        s2 s pop push
+        .if s
+        s s2 _rS call
+        .endif
+        s2
+    .endfunc
+    stackType copyStack call stack _rS call
 .endfunc
 
 .func copyStack stackType
 
-.func _cS s s_copy
-s pop " n =
-.if s
-s s_copy _cS call
-.endif
-s n push
-s_copy n push
-s_copy
-.endfunc
+    .func _cS s s_copy
+        s pop " n =
+        .if s
+            s s_copy _cS call
+        .endif
+        s n push
+        s_copy n push
+        s_copy
+    .endfunc
 
-stackType stack _cS call
+    stackType stack _cS call
 .endfunc
 
 
 .if FILENAME MAIN ==
-1 6 range call #
+    1 6 range call #
 .endif

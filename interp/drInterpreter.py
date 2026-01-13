@@ -174,7 +174,7 @@ class Ev:
 		:param file: a file-like object (stream); defaults to the current sys.stdout.
 		:type file: SupportsWrite[str] | None
 		'''
-		sargs = [repr(i) for i in values]
+		sargs = [self.repr(i) for i in values]
 		print(Fore.GREEN+sep.join(sargs),end=end,file=file)
 	def ev(self, s:str, local_vars: dict|None = None, in_ev_stack: t_stack|None = None,func:tuple[str,int]|None=None):
 		
@@ -308,7 +308,7 @@ class Ev:
 		toks = expr.split()
 		
 		ev_stack:Ev.t_stack = Stack() if in_ev_stack is None else in_ev_stack
-		for tok in toks:
+		for i, tok in enumerate(toks):
 			if tok == '//':
 				self.comment = True if not self.comment else False
 			if self.comment: continue
@@ -338,6 +338,9 @@ class Ev:
 				ev_stack.push(int(tok)) # Turns into integer
 			
 			elif tok in ['True','False']: ev_stack.push(True if tok == 'True' else False)
+			
+			elif not len(toks)-1==i and toks[i+1] in ['=','import','::']:
+				ev_stack.push(str(tok))
 			elif local_vars and tok in local_vars:
 				ev_stack.push(local_vars[tok])
 			elif tok in self.vars: 
@@ -450,7 +453,7 @@ class Ev:
 				if len(ev_stack) == 0:
 					self.err('LOG_ERROR','Nothing to log',line,func)
 					break
-				self.log(str(ev_stack.peek()))
+				self.log(ev_stack.pop())
 			elif tok == '::':
 				
 				if len(ev_stack) < 2:
