@@ -7,10 +7,8 @@ class Die:
     def __str__(self):
         return f'{self.sides} dice'
     def __repr__(self):
-        s = 'stack'
-        for i in self.sides:
-            s += f'{i} push '
-        return f'{s} dice'
+        
+        return f'Stack{self.sides} dice'
     def __len__(self):
         return len(self.sides)
     def __bool__(self):

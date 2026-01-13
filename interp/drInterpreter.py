@@ -3,7 +3,7 @@ import sys
 from dataStruct import Stack, TypedView as View
 from dice import Die,FairDie
 from typing import Any, Literal, Protocol, TypeVar
-from colorama import Fore,init
+from colorama import Fore,Style,init
 from pathlib import Path
 
 init(True)
@@ -79,20 +79,10 @@ class Ev:
 			if c in Ev.operators:
 				return False
 		return True
-	def format_output(self, value:Any) -> str:
-		"""Formats values"""
-		if isinstance(value, (bool,Die)):
-			return repr(value)
-		if isinstance(value, int):
-			# If integer has more than 10 digits, use scientific notation
-			if len(str(abs(value))) > 10:
-				return f"{value:e}"
-			return str(value)
-		
-		if isinstance(value, float):
-			# Always append 'f' to floats
-			return f"{value}f" if value <= float(1.8*10**308) else f'{value}'
-		return repr(value)
+	def repr(self,value:Any):
+		if isinstance(value,(float)):
+			return f'{value}f'
+		return str(value)
 	def err(self,error_type:str='ERROR',message:str='',at:int|None=None,func:tuple[str,int]|None=None):
 		self.quit = True
 		if func:
@@ -455,7 +445,7 @@ class Ev:
 				if len(ev_stack) == 0:
 					self.err('PRINT_ERROR','Nothing to print',line,func)
 					break
-				print(Fore.YELLOW + self.format_output(ev_stack.peek()),end=' ')
+				print(Fore.YELLOW, ev_stack.pop(),end=' ')
 			elif tok == 'log':
 				if len(ev_stack) == 0:
 					self.err('LOG_ERROR','Nothing to log',line,func)
@@ -530,8 +520,10 @@ def help(ev:Ev,command:Literal[None,'--help']|Any=None):
 		case None:
 			print('~~DiceRolls Interpreter~~')
 			print('--help ~> Provides help for other commands.')
-		case '--':
-			print('Runs the console, receives no arguments')
+		case '--repl':
+			print('Runs the console')
+			print('Syntax:')
+			print('--repl --load <file>')
 		case '--help':
 			print('Shows general help or help for a specific command.')
 			print('Syntax: ')
@@ -546,7 +538,8 @@ def console(evaluator:Ev):
 		try:
 			print(Fore.CYAN+'>> '+Fore.RESET,end='')
 			command = input()
-			evaluator.ev_expr(command)
+			s = evaluator.ev_expr(command)
+			print((Style.DIM+str(s.pop())+'\n') if len(s) else '',end='',flush=True)
 		except KeyboardInterrupt:
 			evaluator.maj_err('KEYBOARD_INTERRUPT')
 		except EOFError:
@@ -578,7 +571,7 @@ def main(evaluator:Ev|None=None):
 				evaluator.err('FILE_NOT_FOUND_ERROR',f'Can\'t find file \'{sys.argv[-1]}\' in path')
 		else:
 			match sys.argv[1]:
-				case '--':
+				case '--repl':
 					console(evaluator)
 				case '--help':
 					if len(sys.argv) == 3: # dr --help <command>
@@ -588,6 +581,10 @@ def main(evaluator:Ev|None=None):
 					elif len(sys.argv) > 3: # dr --help <command> <command> ...
 						for c in sys.argv[2:]:
 							help(evaluator,c)
+				case '--version' | '-v':
+					print(Fore.BLUE+'DiceRolls v0.7b')
+				case _:
+					evaluator.err('CONSOLE_ERROR',f'Can\'t find command {sys.argv[1]}')
 	
 def test(interpreted:str,evaluator:Ev):
 	'''
@@ -605,3 +602,10 @@ def test(interpreted:str,evaluator:Ev):
 	evaluator.log([f'{k}: {v}' for k,v in evaluator.vars.items()])
 if __name__ == "__main__":
 	main()
+
+"""
+TODO
+---
+Closures: When adding line to the body, if tok in vars replace tok
+
+"""
