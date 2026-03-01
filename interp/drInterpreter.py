@@ -12,7 +12,7 @@ _T_contra = TypeVar("_T_contra", contravariant=True)
 class SupportsWrite(Protocol[_T_contra]):
 	def write(self, s: _T_contra) -> object: ...
 
-			
+
 class DrFunction:
 	def __init__(self,name:str,args:list[str],body:list[str]):
 		if not (isinstance(name,str)):
@@ -66,8 +66,24 @@ class Ev:
 	t_vars = dict[str,Any]
 	t_funcs = dict[str,DrFunction]
 	
-	
-	
+	@staticmethod
+	def get_tokens(text:str):
+		tokens = [""]
+		id = 0
+		for c in text:
+
+			if c.isspace():
+				id += 1
+				tokens.append("")
+			elif c in "\"":
+				id += 1
+				tokens.append(c)
+				id += 1
+				tokens.append("")
+			else:
+				tokens[id]+=c
+		print(tokens)
+		return list(filter(lambda s: s != '',tokens))
 	def is_valid_var(self,name)->bool:
 		if not isinstance(name,str):
 			return False
@@ -192,7 +208,7 @@ class Ev:
 			if line.startswith('.func'):
 				line = line.split('?')[0] # ignore after comment
 				
-				parts = line.split()
+				parts = Ev.get_tokens(line)
 				if len(parts) < 2: # <= 1 
 					self.err('FUNCTION_DEFINITION_ERROR', f'malformed .func header',i+1,func)
 					return
@@ -305,7 +321,7 @@ class Ev:
 		Supports local variables and a provided stack.
 		'''
 
-		toks = expr.split()
+		toks = Ev.get_tokens(expr)
 		
 		ev_stack:Ev.t_stack = Stack() if in_ev_stack is None else in_ev_stack
 		for i, tok in enumerate(toks):

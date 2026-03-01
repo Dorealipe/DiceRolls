@@ -1,10 +1,10 @@
 math import
 typing import
 
-typing Function :: Function = 
+typing FunctionType :: Function = 
 typing getType :: getType =
 vars
-
+getType #
 1.5f getType call #
 
 16 math sqrt :: call #

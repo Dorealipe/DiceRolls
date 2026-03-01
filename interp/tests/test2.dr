@@ -1,5 +1,5 @@
 random import
-random randfloat rand =
+random randfloat :: rand =
 
 
 .if FILENAME MAIN ==

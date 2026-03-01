@@ -14,12 +14,17 @@ stacks range :: " range =
 .func rangeDice min max
     min max range call dice
 .endfunc
+
 .func randfloat
     d100000 ! 100000 /
 .endfunc
 
 .func randbool
     d2 ! 2 ==
+.endfunc
+
+.func sample stackType
+    stackType dice !
 .endfunc
 
 .if FILENAME MAIN ==
